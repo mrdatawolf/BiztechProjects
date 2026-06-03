@@ -73,7 +73,7 @@ fi
 
 # ── Ensure data directory exists ──────────────────────────────────────────────
 info "Checking data directory..."
-DATA_DIR=$(node -e "require('dotenv').config({path:'$ROOT_ENV'}); const p=process.env.DB_PATH||'./data/projectdb'; const d=require('path').dirname(p); console.log(d)" 2>/dev/null || echo "./data")
+DATA_DIR=$(node -e "require('dotenv').config({path:'$ROOT_ENV'}); const p=require('path').resolve('$SCRIPT_DIR', process.env.DB_PATH||'Data/projectdb'); console.log(require('path').dirname(p))" 2>/dev/null || echo "$SCRIPT_DIR/Data")
 mkdir -p "$DATA_DIR"
 ok "Data directory ready: $DATA_DIR"
 

@@ -5,6 +5,21 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// POST /api/tasks/reorder
+router.post('/reorder', requireAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      await db.query('UPDATE tasks SET position = $1 WHERE id = $2', [i, ids[i]]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reorder tasks' });
+  }
+});
+
 // POST /api/tasks
 router.post('/', requireAuth, async (req, res) => {
   const { phase_id, name, assignee = '', due_date = null, priority = 'm', expected_hours = null } = req.body;

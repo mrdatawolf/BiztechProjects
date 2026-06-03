@@ -28,6 +28,11 @@
   </div>
   <div class="tbr">
     <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+    <button class="btn btn-g" id="importBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="15"/></svg>
+      Import JSON
+    </button>
     <button class="btn btn-p" id="newProjectBtn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       New Project
@@ -181,6 +186,33 @@
       showAlert(err.message);
     }
   }
+
+  document.getElementById('importBtn').addEventListener('click', function () {
+    document.getElementById('importFile').click();
+  });
+
+  document.getElementById('importFile').addEventListener('change', async function () {
+    var file = this.files[0];
+    if (!file) return;
+    this.value = '';
+    var btn = document.getElementById('importBtn');
+    btn.disabled = true; btn.textContent = 'Importing…';
+    try {
+      var text = await file.text();
+      var data = JSON.parse(text);
+      if (!data.project || !Array.isArray(data.phases)) {
+        showAlert('Invalid file — must be a ProjectPlan export JSON.');
+        return;
+      }
+      var project = await apiFetch('/projects/import', { method: 'POST', body: JSON.stringify(data) });
+      window.location.href = '/project.html?id=' + project.id;
+    } catch (err) {
+      showAlert(err.message || 'Import failed — check the file format.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="15"/></svg> Import JSON';
+    }
+  });
 
   document.getElementById('newProjectBtn').addEventListener('click', async function () {
     var btn = this;

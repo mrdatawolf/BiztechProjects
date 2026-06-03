@@ -3,7 +3,9 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { PGlite } = require('@electric-sql/pglite');
 
-const db = new PGlite(process.env.DB_PATH || './data/projectdb');
+const ROOT_DIR = path.resolve(__dirname, '../../');
+const DB_PATH = path.resolve(ROOT_DIR, process.env.DB_PATH || 'Data/projectdb');
+const db = new PGlite(DB_PATH);
 
 async function initDb() {
   await db.exec(`
@@ -16,17 +18,22 @@ async function initDb() {
     );
 
     CREATE TABLE IF NOT EXISTS projects (
-      id          SERIAL PRIMARY KEY,
-      title       TEXT NOT NULL DEFAULT 'New Application Project',
-      description TEXT NOT NULL DEFAULT '',
-      client      TEXT NOT NULL DEFAULT '',
-      team_size   INTEGER NOT NULL DEFAULT 1,
-      team_lead   TEXT NOT NULL DEFAULT '',
-      status      TEXT NOT NULL DEFAULT 'New'
-                    CHECK (status IN ('New','In Progress','Complete')),
-      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at  TIMESTAMPTZ DEFAULT now(),
-      updated_at  TIMESTAMPTZ DEFAULT now()
+      id           SERIAL PRIMARY KEY,
+      title        TEXT NOT NULL DEFAULT 'New Application Project',
+      description  TEXT NOT NULL DEFAULT '',
+      client       TEXT NOT NULL DEFAULT '',
+      team_size    INTEGER NOT NULL DEFAULT 1,
+      team_lead    TEXT NOT NULL DEFAULT '',
+      status       TEXT NOT NULL DEFAULT 'New'
+                     CHECK (status IN ('New','In Progress','Complete')),
+      priority     TEXT NOT NULL DEFAULT 'medium'
+                     CHECK (priority IN ('low','medium','high','critical')),
+      due_date     DATE,
+      paused       BOOLEAN NOT NULL DEFAULT false,
+      pause_reason TEXT NOT NULL DEFAULT '',
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ DEFAULT now(),
+      updated_at   TIMESTAMPTZ DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS phases (
@@ -43,14 +50,15 @@ async function initDb() {
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
-      id        SERIAL PRIMARY KEY,
-      phase_id  INTEGER NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
-      position  INTEGER NOT NULL DEFAULT 0,
-      name      TEXT NOT NULL,
-      assignee  TEXT NOT NULL DEFAULT '',
-      due_date  DATE,
-      priority  TEXT NOT NULL DEFAULT 'm' CHECK (priority IN ('h','m','l')),
-      done      BOOLEAN NOT NULL DEFAULT false
+      id             SERIAL PRIMARY KEY,
+      phase_id       INTEGER NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+      position       INTEGER NOT NULL DEFAULT 0,
+      name           TEXT NOT NULL,
+      assignee       TEXT NOT NULL DEFAULT '',
+      due_date       DATE,
+      priority       TEXT NOT NULL DEFAULT 'm' CHECK (priority IN ('h','m','l')),
+      done           BOOLEAN NOT NULL DEFAULT false,
+      expected_hours DECIMAL(6,2)
     );
 
     CREATE TABLE IF NOT EXISTS deliverables (
@@ -69,7 +77,45 @@ async function initDb() {
       note       TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ DEFAULT now()
     );
+
+    CREATE TABLE IF NOT EXISTS project_links (
+      id         SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      position   INTEGER NOT NULL DEFAULT 0,
+      label      TEXT NOT NULL,
+      url        TEXT NOT NULL
+    );
   `);
 }
 
-module.exports = { db, initDb };
+// Runs after initDb to add columns/tables missing from older databases.
+// Each statement is a separate db.query() so errors surface immediately
+// rather than being swallowed by db.exec().
+async function migrateDb() {
+  const steps = [
+    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS expected_hours DECIMAL(6,2)`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high','critical'))`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS pause_reason TEXT NOT NULL DEFAULT ''`,
+    `CREATE TABLE IF NOT EXISTS project_links (
+      id         SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      position   INTEGER NOT NULL DEFAULT 0,
+      label      TEXT NOT NULL,
+      url        TEXT NOT NULL
+    )`,
+  ];
+  for (const sql of steps) {
+    await db.query(sql);
+  }
+}
+
+async function touchProject(projectId) {
+  if (!projectId) return;
+  try {
+    await db.query('UPDATE projects SET updated_at = now() WHERE id = $1', [parseInt(projectId)]);
+  } catch (e) { /* non-fatal */ }
+}
+
+module.exports = { db, initDb, migrateDb, touchProject };
