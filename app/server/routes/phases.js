@@ -1,9 +1,24 @@
 'use strict';
 const express = require('express');
-const { db, touchProject } = require('../db');
+const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// POST /api/phases/reorder
+router.post('/reorder', requireAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      await db.query('UPDATE phases SET position = $1 WHERE id = $2', [i, ids[i]]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reorder phases' });
+  }
+});
 
 // POST /api/phases
 router.post('/', requireAuth, async (req, res) => {
@@ -20,7 +35,6 @@ router.post('/', requireAuth, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [project_id, pos, name, subtitle, duration, color_class]
     );
-    await touchProject(project_id);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -45,7 +59,6 @@ router.patch('/:id', requireAuth, async (req, res) => {
       values
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Phase not found' });
-    await touchProject(result.rows[0].project_id);
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -57,9 +70,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
-    const ph = await db.query('SELECT project_id FROM phases WHERE id = $1', [id]);
     await db.query('DELETE FROM phases WHERE id = $1', [id]);
-    if (ph.rows.length) await touchProject(ph.rows[0].project_id);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

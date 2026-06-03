@@ -67,18 +67,82 @@ const DEFAULT_PHASES = [
   }
 ];
 
+// POST /api/projects/import
+router.post('/import', requireAuth, async (req, res) => {
+  const { project, phases } = req.body;
+  if (!project || !Array.isArray(phases)) {
+    return res.status(400).json({ error: 'Invalid import format — expected { project, phases }' });
+  }
+  try {
+    const proj = await db.query(
+      `INSERT INTO projects (title, description, client, team_size, team_lead, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        project.title || 'Imported Project',
+        project.description || '',
+        project.client || '',
+        project.team_size || 1,
+        project.team_lead || '',
+        project.status || 'New',
+        req.user.id
+      ]
+    );
+    const newProject = proj.rows[0];
+
+    for (let pi = 0; pi < phases.length; pi++) {
+      const ph = phases[pi];
+      const phRow = await db.query(
+        `INSERT INTO phases (project_id, position, name, subtitle, duration, status, notes, color_class)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [
+          newProject.id, pi,
+          ph.name || '', ph.subtitle || '', ph.duration || '',
+          ph.status || 'Not Started', ph.notes || '',
+          ph.color_class || 'p1'
+        ]
+      );
+      const phaseId = phRow.rows[0].id;
+
+      for (let ti = 0; ti < (ph.tasks || []).length; ti++) {
+        const t = ph.tasks[ti];
+        await db.query(
+          `INSERT INTO tasks (phase_id, position, name, assignee, due_date, priority, done, expected_hours)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [phaseId, ti, t.name || '', t.assignee || '', t.due_date || null,
+           t.priority || 'm', t.done || false, t.expected_hours || null]
+        );
+      }
+
+      for (let di = 0; di < (ph.deliverables || []).length; di++) {
+        const d = ph.deliverables[di];
+        await db.query(
+          `INSERT INTO deliverables (phase_id, position, label) VALUES ($1, $2, $3)`,
+          [phaseId, di, d.label || '']
+        );
+      }
+    }
+
+    res.status(201).json(newProject);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to import project' });
+  }
+});
+
 // GET /api/projects — list all projects with task counts
 router.get('/', requireAuth, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT p.*,
-        COALESCE(tc.total, 0) AS task_total,
-        COALESCE(tc.done, 0)  AS task_done
+        COALESCE(tc.total, 0)     AS task_total,
+        COALESCE(tc.done, 0)      AS task_done,
+        COALESCE(tc.est_hours, 0) AS est_hours
       FROM projects p
       LEFT JOIN (
         SELECT ph.project_id,
                COUNT(t.id)                        AS total,
-               COUNT(t.id) FILTER (WHERE t.done)  AS done
+               COUNT(t.id) FILTER (WHERE t.done)  AS done,
+               SUM(t.expected_hours)              AS est_hours
         FROM phases ph
         JOIN tasks t ON t.phase_id = ph.id
         GROUP BY ph.project_id
@@ -168,12 +232,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       });
     }
 
-    const linksResult = await db.query(
-      'SELECT * FROM project_links WHERE project_id = $1 ORDER BY position',
-      [id]
-    );
-
-    res.json({ ...project, phases, links: linksResult.rows });
+    res.json({ ...project, phases });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load project' });
@@ -183,14 +242,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 // PATCH /api/projects/:id
 router.patch('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status',
-                   'priority', 'due_date', 'paused', 'pause_reason'];
+  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status', 'paused', 'pause_reason'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push(`updated_at = now()`);
-  const values = fields.map(f => (req.body[f] === '' && f === 'due_date') ? null : req.body[f]);
+  const values = fields.map(f => req.body[f]);
   values.push(id);
 
   try {

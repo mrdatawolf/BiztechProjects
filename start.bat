@@ -91,8 +91,8 @@ if not exist "node_modules" (
 
 :: ── Ensure data directory exists ──────────────────────────────────────────────
 echo [INFO] Checking data directory...
-for /f "delims=" %%d in ('node -e "require(\"dotenv\").config({path:\"%ROOT_ENV:\=/%\"});const p=process.env.DB_PATH||\"./data/projectdb\";const path=require(\"path\");console.log(path.dirname(p))" 2^>nul') do set DATA_DIR=%%d
-if "!DATA_DIR!"=="" set DATA_DIR=data
+for /f "delims=" %%d in ('node -e "require(\"dotenv\").config({path:\"%ROOT_ENV:\=/%\"});const p=require(\"path\").resolve(\"%ROOT_DIR:\=/%\",process.env.DB_PATH||\"Data/projectdb\");console.log(require(\"path\").dirname(p))" 2^>nul') do set DATA_DIR=%%d
+if "!DATA_DIR!"=="" set DATA_DIR=%ROOT_DIR%\Data
 if not exist "!DATA_DIR!" (
   mkdir "!DATA_DIR!"
 )
