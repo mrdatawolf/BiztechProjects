@@ -5,19 +5,15 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon server/index.js",
-    "seed": "node server/seed.js",
-    "seed:force": "node server/seed.js --force"
+    "dev": "nodemon server/index.js"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2",
-    "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "sortablejs": "^1.15.3"
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

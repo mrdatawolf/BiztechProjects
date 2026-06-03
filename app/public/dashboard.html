@@ -28,10 +28,6 @@
   </div>
   <div class="tbr">
     <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
-    <button class="btn btn-g" id="backupBtn" title="Download a zip backup of the database">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Backup
-    </button>
     <button class="btn btn-p" id="newProjectBtn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       New Project
@@ -65,68 +61,17 @@
     window.location.href = '/login.html';
   });
 
-  document.getElementById('backupBtn').addEventListener('click', async function () {
-    var btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Preparing…';
-    try {
-      // Fetch the zip as a blob with auth header
-      var res = await fetch('/api/backup/download', {
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
-      });
-      if (!res.ok) {
-        var err = await res.json().catch(function () { return { error: 'Download failed' }; });
-        throw new Error(err.error || 'Download failed');
-      }
-      // Extract filename from Content-Disposition header
-      var cd = res.headers.get('Content-Disposition') || '';
-      var match = cd.match(/filename="([^"]+)"/);
-      var filename = match ? match[1] : 'projectplan-backup.zip';
-
-      var blob = await res.blob();
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
-    } catch (err) {
-      showAlert(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Backup';
-    }
-  });
-
   var alertEl = document.getElementById('alertEl');
   function showAlert(msg, type) {
     alertEl.innerHTML = '<div class="alert alert-' + (type || 'err') + '">' + msg + '</div>';
     if (type === 'ok') setTimeout(function () { alertEl.innerHTML = ''; }, 3000);
   }
 
-  function timeAgo(iso) {
-    if (!iso) return '';
-    // new Date(iso) parses UTC and converts to local time automatically
-    var d = new Date(iso);
-    var diff = Math.floor((Date.now() - d) / 1000);
-    if (diff < 60)  return 'just now';
-    if (diff < 3600)  return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    if (diff < 86400 * 7) return Math.floor(diff / 86400) + 'd ago';
-    return d.toLocaleDateString();  // browser locale, local timezone
-  }
-
-  function fmtDate(iso) {
-    if (!iso) return '';
-    // DATE columns come back as YYYY-MM-DD — parse as local midnight to avoid off-by-one
-    var parts = iso.slice(0, 10).split('-');
-    return new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString();
-  }
-
-  var PRIORITY_LABEL = { low: 'Low', medium: 'Med', high: 'High', critical: 'Critical' };
-  var PRIORITY_COLOR = { low: 'color:var(--suc)', medium: 'color:var(--gld)', high: 'color:var(--err)', critical: 'color:var(--err);font-weight:700' };
-
+  var STATUS_CYCLE = { 'New': 'In Progress', 'In Progress': 'Complete', 'Complete': 'New' };
   function statusClass(s) {
     if (s === 'In Progress') return 'b-act';
     if (s === 'Complete') return 'b-done';
+    if (s === 'Paused') return 'b-pause';
     return 'b-new';
   }
 
@@ -140,28 +85,25 @@
       var total = parseInt(p.task_total) || 0;
       var done = parseInt(p.task_done) || 0;
       var pct = total > 0 ? Math.round(done / total * 100) : 0;
-      var priorityStr = '<span style="font-size:var(--xs);' + (PRIORITY_COLOR[p.priority] || '') + '">' + (PRIORITY_LABEL[p.priority] || p.priority) + ' priority</span>';
-      var dueDateStr  = p.due_date ? '<span style="font-size:var(--xs);color:var(--txtm)">Due ' + fmtDate(p.due_date) + '</span>' : '';
-      var statusBadge = p.paused
-        ? '<span class="badge" style="background:var(--gldhl);color:var(--gld)">Paused</span>'
-        : '<span class="badge ' + statusClass(p.status) + '">' + escHtml(p.status) + '</span>';
+      var estHrs = parseFloat(p.est_hours) || 0;
+      var paused = !!p.paused;
+      var displayStatus = paused ? 'Paused' : p.status;
+      var badgeCls = 'badge ' + statusClass(displayStatus) + (paused ? '' : ' badge-cycle');
+      var badgeTitle = paused ? 'Go to project to unpause' : 'Click to change status';
       return '<div class="proj-card" data-id="' + p.id + '">' +
         '<div class="proj-card-hd">' +
           '<div>' +
             '<div class="proj-title">' + escHtml(p.title) + '</div>' +
             (p.client ? '<div class="proj-client">' + escHtml(p.client) + '</div>' : '') +
           '</div>' +
-          statusBadge +
+          '<span class="' + badgeCls + '" data-badge-id="' + p.id + '" data-status="' + escHtml(p.status) + '" data-paused="' + paused + '" title="' + badgeTitle + '">' + escHtml(displayStatus) + '</span>' +
         '</div>' +
         '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%"></div></div>' +
         '<div class="proj-stats">' +
           '<span>' + pct + '% complete</span>' +
           '<span>' + done + ' / ' + total + ' tasks</span>' +
-          priorityStr +
-          (dueDateStr ? dueDateStr : '') +
+          (estHrs > 0 ? '<span>~' + estHrs + 'h est</span>' : '') +
         '</div>' +
-        (p.paused && p.pause_reason ? '<div style="font-size:var(--xs);color:var(--gld);margin-top:var(--s1);font-style:italic">Paused: ' + escHtml(p.pause_reason) + '</div>' : '') +
-        '<div style="font-size:var(--xs);color:var(--txtf);margin-top:var(--s1)">Updated ' + timeAgo(p.updated_at) + '</div>' +
         '<div class="proj-card-ft">' +
           '<a href="/project.html?id=' + p.id + '" class="btn btn-g" style="font-size:var(--xs);padding:var(--s1) var(--s3)">Open →</a>' +
           '<div class="proj-menu">' +
@@ -203,6 +145,24 @@
           loadProjects();
         } catch (err) {
           showAlert(err.message);
+        }
+      });
+    });
+
+    // Badge click — cycle status (skip if paused)
+    grid.querySelectorAll('[data-badge-id]').forEach(function (badge) {
+      badge.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        if (badge.dataset.paused === 'true') return;
+        var next = STATUS_CYCLE[badge.dataset.status] || 'New';
+        badge.dataset.status = next;
+        badge.textContent = next;
+        badge.className = 'badge ' + statusClass(next) + ' badge-cycle';
+        try {
+          await apiFetch('/projects/' + badge.dataset.badgeId, { method: 'PATCH', body: JSON.stringify({ status: next }) });
+        } catch (err) {
+          showAlert(err.message);
+          loadProjects();
         }
       });
     });

@@ -3,11 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { PGlite } = require('@electric-sql/pglite');
 
-// Resolve relative to the project root (two levels up from server/) so the
-// path is absolute and unambiguous regardless of working directory or OS.
-const ROOT_DIR = path.resolve(__dirname, '../../');
-const DB_PATH = path.resolve(ROOT_DIR, process.env.DB_PATH || 'Data/projectdb');
-const db = new PGlite(DB_PATH);
+const db = new PGlite(process.env.DB_PATH || './data/projectdb');
 
 async function initDb() {
   await db.exec(`
@@ -76,37 +72,4 @@ async function initDb() {
   `);
 }
 
-async function migrateDb() {
-  // Add expected_hours to tasks if not already present
-  await db.exec(`
-    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS expected_hours DECIMAL(6,2);
-  `);
-  // Project-level fields: priority, due date, paused state
-  await db.exec(`
-    ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium'
-      CHECK (priority IN ('low','medium','high','critical'));
-    ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE;
-    ALTER TABLE projects ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT false;
-    ALTER TABLE projects ADD COLUMN IF NOT EXISTS pause_reason TEXT NOT NULL DEFAULT '';
-  `);
-  // Per-project links (Figma, GitHub, staging URLs, docs, etc.)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS project_links (
-      id         SERIAL PRIMARY KEY,
-      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      position   INTEGER NOT NULL DEFAULT 0,
-      label      TEXT NOT NULL,
-      url        TEXT NOT NULL
-    );
-  `);
-}
-
-// Touch project updated_at whenever a child resource changes
-async function touchProject(projectId) {
-  if (!projectId) return;
-  try {
-    await db.query('UPDATE projects SET updated_at = now() WHERE id = $1', [parseInt(projectId)]);
-  } catch (e) { /* non-fatal */ }
-}
-
-module.exports = { db, initDb, migrateDb, touchProject };
+module.exports = { db, initDb };

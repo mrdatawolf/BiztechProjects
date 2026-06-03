@@ -72,13 +72,15 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT p.*,
-        COALESCE(tc.total, 0) AS task_total,
-        COALESCE(tc.done, 0)  AS task_done
+        COALESCE(tc.total, 0)     AS task_total,
+        COALESCE(tc.done, 0)      AS task_done,
+        COALESCE(tc.est_hours, 0) AS est_hours
       FROM projects p
       LEFT JOIN (
         SELECT ph.project_id,
                COUNT(t.id)                        AS total,
-               COUNT(t.id) FILTER (WHERE t.done)  AS done
+               COUNT(t.id) FILTER (WHERE t.done)  AS done,
+               SUM(t.expected_hours)              AS est_hours
         FROM phases ph
         JOIN tasks t ON t.phase_id = ph.id
         GROUP BY ph.project_id
@@ -168,12 +170,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       });
     }
 
-    const linksResult = await db.query(
-      'SELECT * FROM project_links WHERE project_id = $1 ORDER BY position',
-      [id]
-    );
-
-    res.json({ ...project, phases, links: linksResult.rows });
+    res.json({ ...project, phases });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load project' });
@@ -183,14 +180,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 // PATCH /api/projects/:id
 router.patch('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status',
-                   'priority', 'due_date', 'paused', 'pause_reason'];
+  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status', 'paused', 'pause_reason'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push(`updated_at = now()`);
-  const values = fields.map(f => (req.body[f] === '' && f === 'due_date') ? null : req.body[f]);
+  const values = fields.map(f => req.body[f]);
   values.push(id);
 
   try {
