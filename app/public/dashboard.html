@@ -109,6 +109,7 @@
           '<span>' + done + ' / ' + total + ' tasks</span>' +
           (estHrs > 0 ? '<span>~' + estHrs + 'h est</span>' : '') +
         '</div>' +
+        (paused && p.pause_reason ? '<div style="font-size:var(--xs);color:var(--txtm);padding:var(--s2) 0;border-top:1px solid var(--div)"><span style="font-weight:600;text-transform:uppercase;letter-spacing:.07em">Paused: </span>' + escHtml(p.pause_reason) + '</div>' : '') +
         '<div class="proj-card-ft">' +
           '<a href="/project.html?id=' + p.id + '" class="btn btn-g" style="font-size:var(--xs);padding:var(--s1) var(--s3)">Open →</a>' +
           '<div class="proj-menu">' +
