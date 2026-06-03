@@ -198,39 +198,142 @@
       phaseMap[e.phase_id].rows.push(e);
     });
 
-    var html = '<div class="tl-section"><table class="tl-table"><thead><tr>' +
-      '<th>Date</th><th>User</th><th>Task</th><th>Hours</th><th>Note</th><th></th>' +
-      '</tr></thead><tbody>';
+    var section = document.createElement('div');
+    section.className = 'tl-section';
+    var table = document.createElement('table');
+    table.className = 'tl-table';
+    table.innerHTML = '<thead><tr><th>Date</th><th>User</th><th>Task</th><th>Hours</th><th>Note</th><th></th></tr></thead>';
+    var tbody = document.createElement('tbody');
 
     phases.forEach(function (phId) {
       var ph = phaseMap[phId];
       var phTotal = ph.rows.reduce(function (s, r) { return s + parseFloat(r.hours); }, 0);
-      html += '<tr class="tl-phase-row"><td colspan="6">' + escHtml(ph.name) + ' — ' + phTotal.toFixed(1) + 'h total</td></tr>';
+      var hdr = document.createElement('tr');
+      hdr.className = 'tl-phase-row';
+      hdr.innerHTML = '<td colspan="6">' + escHtml(ph.name) + ' — ' + phTotal.toFixed(1) + 'h total</td>';
+      tbody.appendChild(hdr);
+
       ph.rows.forEach(function (e) {
-        var isOwn = user && e.user_id === user.id;
-        html += '<tr data-entry="' + e.id + '">' +
-          '<td>' + (e.date ? e.date.slice(0, 10) : '') + '</td>' +
-          '<td>' + escHtml(e.user_name) + '</td>' +
-          '<td>' + escHtml(e.task_name) + '</td>' +
-          '<td class="tl-hours">' + parseFloat(e.hours).toFixed(1) + 'h</td>' +
-          '<td style="color:var(--txtm)">' + escHtml(e.note) + '</td>' +
-          '<td style="white-space:nowrap">' + (isOwn ? '<button class="iBtn del" style="opacity:1" data-del-entry="' + e.id + '" title="Delete entry"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>' : '') + '</td>' +
-          '</tr>';
+        tbody.appendChild(buildEntryRow(e));
       });
     });
 
-    html += '</tbody></table></div>';
-    el.innerHTML = html;
+    table.appendChild(tbody);
+    section.appendChild(table);
+    el.innerHTML = '';
+    el.appendChild(section);
+  }
 
-    el.querySelectorAll('[data-del-entry]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
+  function buildEntryRow(e) {
+    var isOwn = user && e.user_id === user.id;
+    var tr = document.createElement('tr');
+    tr.dataset.entry = e.id;
+
+    tr.innerHTML =
+      '<td>' + (e.date ? e.date.slice(0, 10) : '') + '</td>' +
+      '<td>' + escHtml(e.user_name) + '</td>' +
+      '<td>' + escHtml(e.task_name) + '</td>' +
+      '<td class="tl-hours">' + parseFloat(e.hours).toFixed(1) + 'h</td>' +
+      '<td style="color:var(--txtm)">' + escHtml(e.note) + '</td>' +
+      '<td style="white-space:nowrap;display:flex;gap:var(--s1);align-items:center"></td>';
+
+    if (isOwn) {
+      var actCell = tr.cells[5];
+
+      // Edit button
+      var editBtn = document.createElement('button');
+      editBtn.className = 'iBtn'; editBtn.style.opacity = '1'; editBtn.title = 'Edit entry';
+      editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+      editBtn.addEventListener('click', function () { expandEditRow(tr, e); });
+      actCell.appendChild(editBtn);
+
+      // Delete button
+      var delBtn = document.createElement('button');
+      delBtn.className = 'iBtn del'; delBtn.style.opacity = '1'; delBtn.title = 'Delete entry';
+      delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+      delBtn.addEventListener('click', async function () {
         if (!confirm('Delete this time entry?')) return;
         try {
-          await apiFetch('/time-entries/' + btn.dataset.delEntry, { method: 'DELETE' });
+          await apiFetch('/time-entries/' + e.id, { method: 'DELETE' });
           await loadEntries();
         } catch (err) { showAlert(err.message); }
       });
+      actCell.appendChild(delBtn);
+    }
+    return tr;
+  }
+
+  function expandEditRow(tr, e) {
+    var dateVal  = e.date ? e.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    var hoursVal = parseFloat(e.hours).toFixed(2);
+    var noteVal  = e.note || '';
+
+    // Build inline edit cells
+    tr.cells[0].innerHTML = '';
+    var dateIn = document.createElement('input');
+    dateIn.type = 'date'; dateIn.className = 'form-input'; dateIn.value = dateVal;
+    dateIn.style.cssText = 'font-size:var(--xs);padding:var(--s1) var(--s2);width:130px';
+    tr.cells[0].appendChild(dateIn);
+
+    // cells[1] (user) and cells[2] (task) stay read-only
+
+    tr.cells[3].innerHTML = '';
+    var hoursIn = document.createElement('input');
+    hoursIn.type = 'number'; hoursIn.className = 'form-input'; hoursIn.value = hoursVal;
+    hoursIn.min = '0.1'; hoursIn.step = '0.25';
+    hoursIn.style.cssText = 'font-size:var(--xs);padding:var(--s1) var(--s2);width:70px';
+    tr.cells[3].appendChild(hoursIn);
+
+    tr.cells[4].innerHTML = '';
+    var noteIn = document.createElement('input');
+    noteIn.type = 'text'; noteIn.className = 'form-input'; noteIn.value = noteVal;
+    noteIn.placeholder = 'Note';
+    noteIn.style.cssText = 'font-size:var(--xs);padding:var(--s1) var(--s2);width:100%';
+    tr.cells[4].appendChild(noteIn);
+
+    tr.cells[5].innerHTML = '';
+    tr.cells[5].style.cssText = 'white-space:nowrap;display:flex;gap:var(--s1);align-items:center';
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-p'; saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'font-size:var(--xs);padding:var(--s1) var(--s3)';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-g'; cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'font-size:var(--xs);padding:var(--s1) var(--s3)';
+
+    var errSpan = document.createElement('span');
+    errSpan.style.cssText = 'font-size:var(--xs);color:var(--err)';
+
+    tr.cells[5].appendChild(saveBtn);
+    tr.cells[5].appendChild(cancelBtn);
+    tr.cells[5].appendChild(errSpan);
+
+    hoursIn.focus();
+
+    saveBtn.addEventListener('click', async function () {
+      var h = parseFloat(hoursIn.value);
+      if (!h || h <= 0) {
+        hoursIn.classList.add('field-error');
+        errSpan.textContent = 'Hours required';
+        return;
+      }
+      hoursIn.classList.remove('field-error');
+      errSpan.textContent = '';
+      saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+      try {
+        await apiFetch('/time-entries/' + e.id, {
+          method: 'PATCH',
+          body: JSON.stringify({ hours: h, date: dateIn.value, note: noteIn.value.trim() })
+        });
+        await loadEntries();
+      } catch (err) {
+        errSpan.textContent = err.message;
+        saveBtn.disabled = false; saveBtn.textContent = 'Save';
+      }
     });
+
+    cancelBtn.addEventListener('click', function () { loadEntries(); });
   }
 
   // ── Log time ───────────────────────────────────────────────────────────

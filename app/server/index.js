@@ -3,7 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const express = require('express');
 const cors = require('cors');
-const { initDb } = require('./db');
+const { initDb, migrateDb } = require('./db');
 
 const app = express();
 
@@ -17,6 +17,8 @@ app.use('/api/phases', require('./routes/phases'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/deliverables', require('./routes/deliverables'));
 app.use('/api/time-entries', require('./routes/timeEntries'));
+app.use('/api/links',  require('./routes/links'));
+app.use('/api/backup', require('./routes/backup'));
 
 // Serve login page for any unmatched GET (direct URL navigation)
 app.get('*', (req, res) => {
@@ -27,6 +29,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 initDb()
+  .then(() => migrateDb())
   .then(() => {
     app.listen(PORT, HOST, () => {
       const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;

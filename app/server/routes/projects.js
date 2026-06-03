@@ -168,7 +168,12 @@ router.get('/:id', requireAuth, async (req, res) => {
       });
     }
 
-    res.json({ ...project, phases });
+    const linksResult = await db.query(
+      'SELECT * FROM project_links WHERE project_id = $1 ORDER BY position',
+      [id]
+    );
+
+    res.json({ ...project, phases, links: linksResult.rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load project' });
@@ -178,13 +183,14 @@ router.get('/:id', requireAuth, async (req, res) => {
 // PATCH /api/projects/:id
 router.patch('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status'];
+  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status',
+                   'priority', 'due_date', 'paused', 'pause_reason'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push(`updated_at = now()`);
-  const values = fields.map(f => req.body[f]);
+  const values = fields.map(f => (req.body[f] === '' && f === 'due_date') ? null : req.body[f]);
   values.push(id);
 
   try {
