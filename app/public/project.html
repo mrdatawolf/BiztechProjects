@@ -55,16 +55,35 @@
   <div class="phdr">
     <div class="pmeta">
       <span class="badge b-new" id="statusBadge">New</span>
+      <span class="badge" id="pausedBadge" style="display:none;background:var(--gldhl);color:var(--gld)">Paused</span>
       <span style="font-size:var(--xs);color:var(--txtm)">Started: <span id="startDate">—</span></span>
       <span style="font-size:var(--xs);color:var(--txtm)">Client:
-        <input class="editable" id="projClient" placeholder="Client or context" style="font-size:var(--xs);width:200px">
+        <input class="editable" id="projClient" placeholder="Client or context" style="font-size:var(--xs);width:160px">
+      </span>
+      <span style="font-size:var(--xs);color:var(--txtm)">Priority:
+        <select class="ssel" id="projPriority" style="font-size:var(--xs)">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </span>
+      <span style="font-size:var(--xs);color:var(--txtm)">Due:
+        <input class="editable" id="projDueDate" type="date" style="font-size:var(--xs)">
+      </span>
+      <label style="font-size:var(--xs);color:var(--txtm);display:flex;align-items:center;gap:var(--s1);cursor:pointer">
+        <input type="checkbox" id="projPaused" style="cursor:pointer">
+        Paused
+      </label>
+      <span id="pauseReasonWrap" style="display:none;font-size:var(--xs)">
+        <input class="editable" id="projPauseReason" placeholder="Reason…" style="font-size:var(--xs);width:200px">
       </span>
     </div>
     <input class="editable" id="projTitle"
       style="font-family:var(--fd);font-size:var(--xl);font-style:italic;display:block;width:100%;margin-bottom:.5rem">
-    <textarea class="editable" id="projDesc" rows="2"
+    <textarea class="editable" id="projDesc"
       placeholder="Short description of the application and its goals…"
-      style="font-size:var(--sm);color:var(--txtm);width:100%;max-width:65ch;resize:none;display:block"></textarea>
+      style="font-size:var(--sm);color:var(--txtm);width:100%;max-width:65ch;min-height:5em;resize:vertical;line-height:1.5;display:block"></textarea>
   </div>
 
   <!-- Summary -->
@@ -92,9 +111,27 @@
       </div>
       <div class="sumsub"><input class="editable" id="teamLead" placeholder="Lead: name" style="font-size:var(--xs);width:130px"></div>
     </div>
+    <div class="sumcard">
+      <div class="sumlbl">Estimated Hours</div>
+      <div class="sumval" id="projEstHours">—</div>
+      <div class="sumsub" id="projLogHours">0h logged</div>
+    </div>
   </div>
 
   <div class="phasesgrid" id="phasesEl"></div>
+
+  <div class="tlsec">
+    <div class="sech">Project Links</div>
+    <div class="links-grid" id="linksEl"></div>
+    <div class="links-add">
+      <input id="linkLabel" placeholder="Label (e.g. Figma)" style="width:140px">
+      <input id="linkUrl" placeholder="https://" style="width:260px">
+      <button class="addbtn" id="addLinkBtn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Link
+      </button>
+    </div>
+  </div>
 
   <div class="tlsec">
     <div class="sech">Timeline Overview</div>
@@ -103,6 +140,7 @@
 </main>
 </div>
 
+<script src="/js/Sortable.min.js"></script>
 <script src="/js/api.js"></script>
 <script>
 (function () {
@@ -114,7 +152,6 @@
   document.getElementById('timelogLink').href = '/timelog.html?id=' + projectId;
 
   var state = null;
-  var dirty = new Set();
 
   var alertEl = document.getElementById('alertEl');
   function showAlert(msg, type) {
@@ -126,17 +163,106 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function markDirty(key) { dirty.add(key); }
+  function setErr(el, on) {
+    if (on) el.classList.add('field-error'); else el.classList.remove('field-error');
+  }
+
+  function formatH(h) {
+    if (!h) return '—';
+    return h % 1 === 0 ? h + 'h' : parseFloat(h).toFixed(1) + 'h';
+  }
+
+  // Auto-save helpers — fire on blur, validate required fields first
+  async function autoSaveProject() {
+    var titleEl = document.getElementById('projTitle');
+    var title = titleEl.value.trim();
+    if (!title) { setErr(titleEl, true); return; }
+    setErr(titleEl, false);
+    try {
+      var dueDateRaw = document.getElementById('projDueDate').value;
+      await apiFetch('/projects/' + projectId, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title:        title,
+          description:  document.getElementById('projDesc').value,
+          client:       document.getElementById('projClient').value,
+          team_size:    parseInt(document.getElementById('teamSize').value) || 1,
+          team_lead:    document.getElementById('teamLead').value,
+          priority:     document.getElementById('projPriority').value,
+          due_date:     dueDateRaw || null,
+          paused:       document.getElementById('projPaused').checked,
+          pause_reason: document.getElementById('projPauseReason').value
+        })
+      });
+    } catch (err) { showAlert(err.message); }
+  }
+
+  async function autoSavePhase(ph, nameEl) {
+    var name = nameEl.value.trim();
+    if (!name) { setErr(nameEl, true); return; }
+    setErr(nameEl, false);
+    ph.name = name;
+    try {
+      await apiFetch('/phases/' + ph.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: ph.name, subtitle: ph.subtitle, duration: ph.duration, notes: ph.notes })
+      });
+    } catch (err) { showAlert(err.message); }
+  }
+
+  async function autoSavePhaseField(ph, field, value) {
+    ph[field] = value;
+    try {
+      await apiFetch('/phases/' + ph.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: ph.name, subtitle: ph.subtitle, duration: ph.duration, notes: ph.notes })
+      });
+    } catch (err) { showAlert(err.message); }
+  }
+
+  async function autoSaveTask(task, nameEl) {
+    var name = (nameEl.textContent || '').trim();
+    if (!name) { setErr(nameEl, true); return; }
+    setErr(nameEl, false);
+    task.name = name;
+    try {
+      await apiFetch('/tasks/' + task.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority })
+      });
+    } catch (err) { showAlert(err.message); }
+  }
+
+  async function autoSaveTaskField(task, field, value) {
+    task[field] = value;
+    try {
+      await apiFetch('/tasks/' + task.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority, done: task.done })
+      });
+    } catch (err) { showAlert(err.message); }
+  }
 
   // ── Stats ──────────────────────────────────────────────────────────────
   function updateStats() {
-    var tot = 0, dn = 0, act = null;
+    var tot = 0, dn = 0, act = null, projEst = 0, projLogged = 0;
     state.phases.forEach(function (ph) {
       tot += ph.tasks.length;
-      ph.tasks.forEach(function (t) { if (t.done) dn++; });
+      ph.tasks.forEach(function (t) {
+        if (t.done) dn++;
+        projEst    += parseFloat(t.expected_hours) || 0;
+        projLogged += parseFloat(t.hours_logged)   || 0;
+      });
       if (ph.status === 'In Progress' && !act) act = ph;
     });
     var pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
+    var estEl = document.getElementById('projEstHours');
+    if (estEl) estEl.textContent = formatH(projEst);
+    var logEl = document.getElementById('projLogHours');
+    if (logEl) {
+      logEl.textContent = formatH(projLogged) + ' logged';
+      logEl.style.color = projEst > 0 && projLogged > projEst ? 'var(--err)' : '';
+    }
     document.getElementById('oPct').textContent = pct + '%';
     document.getElementById('oBar').style.width = pct + '%';
     document.getElementById('tTotal').textContent = tot;
@@ -158,12 +284,24 @@
   function updPhStats(phaseId) {
     var ph = state.phases.find(function (p) { return p.id === phaseId; });
     if (!ph) return;
-    var tot = ph.tasks.length, dn = 0;
-    ph.tasks.forEach(function (t) { if (t.done) dn++; });
+    var tot = ph.tasks.length, dn = 0, est = 0, logged = 0;
+    ph.tasks.forEach(function (t) {
+      if (t.done) dn++;
+      est    += parseFloat(t.expected_hours) || 0;
+      logged += parseFloat(t.hours_logged)   || 0;
+    });
     var pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
     var pb = document.getElementById('pb' + phaseId); if (pb) pb.style.width = pct + '%';
     var pp = document.getElementById('pp' + phaseId); if (pp) pp.textContent = pct + '%';
     var tl = document.getElementById('ptl' + phaseId); if (tl) tl.textContent = 'Tasks (' + dn + '/' + tot + ')';
+
+    var estEl = document.getElementById('ph-est-' + phaseId);
+    var logEl = document.getElementById('ph-log-' + phaseId);
+    if (estEl) { estEl.textContent = formatH(est); estEl.className = 'ph-totals-val'; }
+    if (logEl) {
+      logEl.textContent = formatH(logged);
+      logEl.className = 'ph-totals-val' + (est > 0 && logged > est ? ' ph-totals-over' : '');
+    }
     updateStats();
   }
 
@@ -172,6 +310,13 @@
     var row = document.createElement('div');
     row.className = 'trow' + (task.done ? ' done' : '');
     row.id = 'tr' + task.id;
+    row.dataset.taskId = task.id;
+
+    var handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.title = 'Drag to reorder';
+    handle.innerHTML = '<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg>';
+    row.appendChild(handle);
 
     var cb = document.createElement('input');
     cb.type = 'checkbox'; cb.className = 'tck'; cb.checked = task.done;
@@ -194,9 +339,7 @@
 
     var nm = document.createElement('div'); nm.className = 'tname';
     nm.contentEditable = 'true'; nm.spellcheck = false; nm.textContent = task.name;
-    nm.addEventListener('blur', function () {
-      if (task.name !== this.textContent) { task.name = this.textContent; markDirty('task:' + task.id); }
-    });
+    nm.addEventListener('blur', function () { autoSaveTask(task, nm); });
     bd.appendChild(nm);
 
     var meta = document.createElement('div'); meta.className = 'tmeta';
@@ -214,7 +357,7 @@
     as.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
     var ai = document.createElement('input'); ai.className = 'editable'; ai.placeholder = 'Assignee';
     ai.value = task.assignee || ''; ai.style.cssText = 'font-size:var(--xs);width:80px';
-    ai.addEventListener('change', function () { task.assignee = this.value; markDirty('task:' + task.id); });
+    ai.addEventListener('change', function () { autoSaveTaskField(task, 'assignee', this.value); });
     as.appendChild(ai); meta.appendChild(as);
 
     // Due date
@@ -222,8 +365,21 @@
     ds.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
     var di = document.createElement('input'); di.type = 'date'; di.className = 'editable';
     di.value = task.due_date ? task.due_date.slice(0, 10) : ''; di.style.cssText = 'font-size:var(--xs)';
-    di.addEventListener('change', function () { task.due_date = this.value; markDirty('task:' + task.id); });
+    di.addEventListener('change', function () { autoSaveTaskField(task, 'due_date', this.value); });
     ds.appendChild(di); meta.appendChild(ds);
+
+    // Expected hours
+    var es = document.createElement('span'); es.className = 'tmf';
+    es.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    var ei = document.createElement('input'); ei.type = 'number'; ei.className = 'editable';
+    ei.placeholder = 'Est. h'; ei.min = '0'; ei.step = '0.25';
+    ei.value = task.expected_hours != null ? task.expected_hours : '';
+    ei.style.cssText = 'font-size:var(--xs);width:60px';
+    ei.addEventListener('change', function () {
+      var v = this.value === '' ? null : parseFloat(this.value);
+      autoSaveTaskField(task, 'expected_hours', v);
+    });
+    es.appendChild(ei); meta.appendChild(es);
 
     // Priority
     var pmap = { h: 'ph', m: 'pm', l: 'pl' };
@@ -238,8 +394,8 @@
       psel.appendChild(op);
     });
     psel.addEventListener('change', function () {
-      task.priority = this.value; dot.className = 'pdot ' + pmap[this.value];
-      markDirty('task:' + task.id);
+      dot.className = 'pdot ' + pmap[this.value];
+      autoSaveTaskField(task, 'priority', this.value);
     });
     ps.appendChild(psel); meta.appendChild(ps);
     bd.appendChild(meta);
@@ -280,11 +436,13 @@
 
     var info = document.createElement('div'); info.className = 'pinfo';
     var ti = document.createElement('input'); ti.className = 'editable pti'; ti.value = ph.name;
-    ti.addEventListener('change', function () { ph.name = this.value; markDirty('phase:' + ph.id); renderTL(); });
+    ti.addEventListener('blur', function () { autoSavePhase(ph, ti); renderTL(); });
     info.appendChild(ti);
 
-    var si = document.createElement('input'); si.className = 'editable psi'; si.value = ph.subtitle || '';
-    si.addEventListener('change', function () { ph.subtitle = this.value; markDirty('phase:' + ph.id); });
+    var si = document.createElement('textarea'); si.className = 'editable psi';
+    si.style.cssText = 'min-height:5em;resize:vertical;line-height:1.5;display:block;width:100%';
+    si.value = ph.subtitle || '';
+    si.addEventListener('blur', function () { autoSavePhaseField(ph, 'subtitle', this.value); });
     info.appendChild(si);
 
     var pr = document.createElement('div'); pr.className = 'pprow';
@@ -315,7 +473,25 @@
         await apiFetch('/phases/' + ph.id, { method: 'PATCH', body: JSON.stringify({ status: ph.status }) });
       } catch (err) { showAlert(err.message); }
     });
-    pacts.appendChild(sel); hd.appendChild(pacts);
+    pacts.appendChild(sel);
+
+    var delPhBtn = document.createElement('button');
+    delPhBtn.className = 'iBtn del'; delPhBtn.title = 'Delete phase';
+    delPhBtn.style.cssText = 'opacity:1;width:32px;height:32px';
+    delPhBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+    delPhBtn.addEventListener('click', async function () {
+      if (!confirm('Delete phase "' + ph.name + '" and all its tasks? This cannot be undone.')) return;
+      try {
+        await apiFetch('/phases/' + ph.id, { method: 'DELETE' });
+        state.phases = state.phases.filter(function (p) { return p.id !== ph.id; });
+        renderPhases();
+        renderTL();
+        updateStats();
+      } catch (err) { showAlert(err.message); }
+    });
+    pacts.appendChild(delPhBtn);
+
+    hd.appendChild(pacts);
     card.appendChild(hd);
 
     // Tasks
@@ -327,9 +503,23 @@
     ab.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Task';
     ab.addEventListener('click', function () { addTask(ph.id); });
     th.appendChild(tl); th.appendChild(ab); ts.appendChild(th);
-    var tlist = document.createElement('div'); tlist.id = 'tl' + ph.id;
+    var tlist = document.createElement('div'); tlist.id = 'tl' + ph.id; tlist.dataset.phaseId = ph.id;
     ph.tasks.forEach(function (t) { tlist.appendChild(mkRow(t, ph.id)); });
-    ts.appendChild(tlist); card.appendChild(ts);
+    ts.appendChild(tlist);
+
+    // Phase hour totals
+    var est = 0, logged = 0;
+    ph.tasks.forEach(function (t) {
+      est    += parseFloat(t.expected_hours) || 0;
+      logged += parseFloat(t.hours_logged)   || 0;
+    });
+    var totRow = document.createElement('div'); totRow.className = 'ph-totals';
+    totRow.innerHTML =
+      '<span class="ph-totals-item"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14.5 13.5"/></svg> Estimated: <span class="ph-totals-val" id="ph-est-' + ph.id + '">' + formatH(est) + '</span></span>' +
+      '<span class="ph-totals-item"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Logged: <span class="ph-totals-val' + (est > 0 && logged > est ? ' ph-totals-over' : '') + '" id="ph-log-' + ph.id + '">' + formatH(logged) + '</span></span>';
+    ts.appendChild(totRow);
+
+    card.appendChild(ts);
 
     // Deliverables
     var ds = document.createElement('div'); ds.className = 'delsec';
@@ -351,7 +541,7 @@
     var nl = document.createElement('div'); nl.className = 'notelbl'; nl.textContent = 'Phase Notes'; ns.appendChild(nl);
     var nt = document.createElement('textarea'); nt.className = 'noteta'; nt.rows = 2;
     nt.placeholder = 'Add notes, blockers, or context…'; nt.value = ph.notes || '';
-    nt.addEventListener('change', function () { ph.notes = this.value; markDirty('phase:' + ph.id); });
+    nt.addEventListener('blur', function () { autoSavePhaseField(ph, 'notes', this.value); });
     ns.appendChild(nt); card.appendChild(ns);
 
     return card;
@@ -396,10 +586,95 @@
     } catch (err) { showAlert(err.message); }
   }
 
+  // ── Add phase ──────────────────────────────────────────────────────────
+  async function addPhase() {
+    var name = prompt('Phase name:'); if (!name || !name.trim()) return;
+    var colorClasses = ['p1','p2','p3','p4'];
+    var colorClass = colorClasses[state.phases.length % 4];
+    try {
+      var phase = await apiFetch('/phases', {
+        method: 'POST',
+        body: JSON.stringify({ project_id: projectId, name: name.trim(), color_class: colorClass })
+      });
+      phase.tasks = []; phase.deliverables = [];
+      state.phases.push(phase);
+      renderPhases();
+      renderTL();
+      updateStats();
+    } catch (err) { showAlert(err.message); }
+  }
+
+  // ── Drag-and-drop reorder ──────────────────────────────────────────────
+  async function onTaskDrop(evt) {
+    var fromPhaseId = parseInt(evt.from.dataset.phaseId);
+    var toPhaseId   = parseInt(evt.to.dataset.phaseId);
+    var taskId      = parseInt(evt.item.dataset.taskId);
+
+    // If cross-phase move, update task in state
+    if (fromPhaseId !== toPhaseId) {
+      var fromPh = state.phases.find(function (p) { return p.id === fromPhaseId; });
+      var toPh   = state.phases.find(function (p) { return p.id === toPhaseId; });
+      if (fromPh && toPh) {
+        var idx = fromPh.tasks.findIndex(function (t) { return t.id === taskId; });
+        if (idx !== -1) {
+          var moved = fromPh.tasks.splice(idx, 1)[0];
+          moved.phase_id = toPhaseId;
+          toPh.tasks.splice(evt.newIndex, 0, moved);
+        }
+      }
+    }
+
+    // Collect current DOM order for each affected phase and save
+    var phases = [toPhaseId];
+    if (fromPhaseId !== toPhaseId) phases.push(fromPhaseId);
+
+    try {
+      await Promise.all(phases.map(function (phId) {
+        var listEl = document.getElementById('tl' + phId);
+        if (!listEl) return Promise.resolve();
+        var ids = Array.from(listEl.querySelectorAll('[data-task-id]'))
+          .map(function (el) { return parseInt(el.dataset.taskId); });
+        return apiFetch('/tasks/reorder', {
+          method: 'POST',
+          body: JSON.stringify({ phase_id: phId, task_ids: ids })
+        });
+      }));
+    } catch (err) {
+      showAlert('Could not save task order: ' + err.message);
+    }
+
+    updPhStats(toPhaseId);
+    if (fromPhaseId !== toPhaseId) updPhStats(fromPhaseId);
+  }
+
+  function initSortable() {
+    state.phases.forEach(function (ph) {
+      var listEl = document.getElementById('tl' + ph.id);
+      if (!listEl) return;
+      Sortable.create(listEl, {
+        group:     'tasks',
+        handle:    '.drag-handle',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        dragClass:  'sortable-drag',
+        onEnd: onTaskDrop
+      });
+    });
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────
   function renderPhases() {
     var el = document.getElementById('phasesEl'); el.innerHTML = '';
     state.phases.forEach(function (ph, i) { el.appendChild(mkCard(ph, i)); });
+
+    var addBtn = document.createElement('button');
+    addBtn.className = 'addbtn';
+    addBtn.style.cssText = 'margin-top:var(--s4);font-size:var(--sm);padding:var(--s3) var(--s4)';
+    addBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Phase';
+    addBtn.addEventListener('click', addPhase);
+    el.appendChild(addBtn);
+
+    initSortable();
   }
 
   function renderTL() {
@@ -412,7 +687,7 @@
       var rw = document.createElement('div'); rw.className = 'tlrng';
       var ri = document.createElement('input'); ri.className = 'editable'; ri.value = ph.duration || '';
       ri.style.cssText = 'font-size:var(--xs);width:100%';
-      ri.addEventListener('change', function () { ph.duration = this.value; markDirty('phase:' + ph.id); });
+      ri.addEventListener('blur', function () { autoSavePhaseField(ph, 'duration', this.value); });
       rw.appendChild(ri); cell.appendChild(rw);
       var bar = document.createElement('div'); bar.className = 'tlbar'; cell.appendChild(bar);
       el.appendChild(cell);
@@ -436,51 +711,64 @@
       document.getElementById('startDate').textContent = new Date(state.created_at).toLocaleDateString();
     }
 
-    ['projTitle','projDesc','projClient','teamSize','teamLead'].forEach(function (id) {
-      document.getElementById(id).addEventListener('input', function () { markDirty('project'); });
+    // Populate new fields
+    document.getElementById('projPriority').value = state.priority || 'medium';
+    var dueDateEl = document.getElementById('projDueDate');
+    dueDateEl.value = state.due_date ? state.due_date.slice(0, 10) : '';
+    var pausedEl = document.getElementById('projPaused');
+    pausedEl.checked = !!state.paused;
+    document.getElementById('projPauseReason').value = state.pause_reason || '';
+    document.getElementById('pauseReasonWrap').style.display = state.paused ? '' : 'none';
+    document.getElementById('pausedBadge').style.display   = state.paused ? '' : 'none';
+
+    // Paused checkbox toggles reason field visibility immediately + saves
+    pausedEl.addEventListener('change', function () {
+      document.getElementById('pauseReasonWrap').style.display = this.checked ? '' : 'none';
+      document.getElementById('pausedBadge').style.display     = this.checked ? '' : 'none';
+      autoSaveProject();
     });
+
+    // Title is required — validate on input so error clears as soon as user types
+    document.getElementById('projTitle').addEventListener('input', function () {
+      setErr(this, !this.value.trim());
+    });
+    // All project fields save on blur / change
+    ['projTitle','projDesc','projClient','teamSize','teamLead','projPauseReason'].forEach(function (id) {
+      document.getElementById(id).addEventListener('blur', autoSaveProject);
+    });
+    document.getElementById('projPriority').addEventListener('change', autoSaveProject);
+    document.getElementById('projDueDate').addEventListener('change', autoSaveProject);
   }
 
-  // ── Save ───────────────────────────────────────────────────────────────
+  // ── Save All button — force-saves every field (safety net) ────────────
   document.getElementById('saveBtn').addEventListener('click', async function () {
     var btn = this;
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-      var calls = [];
-      if (dirty.has('project')) {
-        calls.push(apiFetch('/projects/' + projectId, {
+      var calls = [apiFetch('/projects/' + projectId, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: document.getElementById('projTitle').value.trim() || state.title,
+          description: document.getElementById('projDesc').value,
+          client: document.getElementById('projClient').value,
+          team_size: parseInt(document.getElementById('teamSize').value) || 1,
+          team_lead: document.getElementById('teamLead').value
+        })
+      })];
+      state.phases.forEach(function (ph) {
+        calls.push(apiFetch('/phases/' + ph.id, {
           method: 'PATCH',
-          body: JSON.stringify({
-            title: document.getElementById('projTitle').value,
-            description: document.getElementById('projDesc').value,
-            client: document.getElementById('projClient').value,
-            team_size: parseInt(document.getElementById('teamSize').value) || 1,
-            team_lead: document.getElementById('teamLead').value
-          })
+          body: JSON.stringify({ name: ph.name, subtitle: ph.subtitle, duration: ph.duration, notes: ph.notes })
         }));
-      }
-      dirty.forEach(function (key) {
-        if (key.startsWith('phase:')) {
-          var phId = parseInt(key.slice(6));
-          var ph = state.phases.find(function (p) { return p.id === phId; });
-          if (ph) calls.push(apiFetch('/phases/' + phId, {
+        ph.tasks.forEach(function (t) {
+          calls.push(apiFetch('/tasks/' + t.id, {
             method: 'PATCH',
-            body: JSON.stringify({ name: ph.name, subtitle: ph.subtitle, duration: ph.duration, notes: ph.notes })
+            body: JSON.stringify({ name: t.name, assignee: t.assignee, due_date: t.due_date || '', priority: t.priority, done: t.done })
           }));
-        }
-        if (key.startsWith('task:')) {
-          var tId = parseInt(key.slice(5));
-          var task = null;
-          state.phases.forEach(function (p) { p.tasks.forEach(function (t) { if (t.id === tId) task = t; }); });
-          if (task) calls.push(apiFetch('/tasks/' + tId, {
-            method: 'PATCH',
-            body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority })
-          }));
-        }
+        });
       });
       await Promise.all(calls);
-      dirty.clear();
-      showAlert('Saved successfully', 'ok');
+      showAlert('All changes saved', 'ok');
     } catch (err) {
       showAlert('Save failed: ' + err.message);
     } finally {
@@ -497,6 +785,58 @@
     a.download = (state.title || 'project-plan').toLowerCase().replace(/\s+/g, '-') + '.json'; a.click();
   });
 
+  // ── Links ──────────────────────────────────────────────────────────────
+  function renderLinks() {
+    var el = document.getElementById('linksEl'); el.innerHTML = '';
+    (state.links || []).forEach(function (lnk) {
+      var chip = document.createElement('a');
+      chip.className = 'link-chip';
+      chip.href = lnk.url; chip.target = '_blank'; chip.rel = 'noopener';
+      chip.innerHTML =
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
+        escHtml(lnk.label);
+      var del = document.createElement('span'); del.className = 'link-chip-del'; del.textContent = '×';
+      del.addEventListener('click', async function (e) {
+        e.preventDefault(); e.stopPropagation();
+        try {
+          await apiFetch('/links/' + lnk.id, { method: 'DELETE' });
+          state.links = state.links.filter(function (l) { return l.id !== lnk.id; });
+          renderLinks();
+        } catch (err) { showAlert(err.message); }
+      });
+      chip.appendChild(del);
+      el.appendChild(chip);
+    });
+  }
+
+  document.getElementById('addLinkBtn').addEventListener('click', async function () {
+    var labelIn = document.getElementById('linkLabel');
+    var urlIn   = document.getElementById('linkUrl');
+    var label = labelIn.value.trim();
+    var url   = urlIn.value.trim();
+    var valid = true;
+    if (!label) { labelIn.classList.add('field-error'); valid = false; } else labelIn.classList.remove('field-error');
+    if (!url)   { urlIn.classList.add('field-error');   valid = false; } else urlIn.classList.remove('field-error');
+    if (!valid) return;
+    // Prepend https:// if no protocol given
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    try {
+      var lnk = await apiFetch('/links', {
+        method: 'POST',
+        body: JSON.stringify({ project_id: projectId, label: label, url: url })
+      });
+      state.links = state.links || [];
+      state.links.push(lnk);
+      renderLinks();
+      labelIn.value = ''; urlIn.value = '';
+    } catch (err) { showAlert(err.message); }
+  });
+
+  // Also submit on Enter in the URL field
+  document.getElementById('linkUrl').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addLinkBtn').click(); }
+  });
+
   // ── Load ───────────────────────────────────────────────────────────────
   async function loadProject() {
     try {
@@ -504,6 +844,7 @@
       hydrateHeader();
       renderPhases();
       renderTL();
+      renderLinks();
       updateStats();
     } catch (err) {
       showAlert('Failed to load project: ' + err.message);
