@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project — ProjectPlan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/shared.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div class="shell">
+<header class="topbar">
+  <div class="tbl">
+    <a href="/dashboard.html" class="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect x="2" y="2" width="28" height="28" rx="6" fill="#01696f" opacity=".12"/>
+        <rect x="7" y="8" width="12" height="2.5" rx="1.25" fill="#01696f"/>
+        <rect x="7" y="13" width="18" height="2.5" rx="1.25" fill="#01696f" opacity=".6"/>
+        <rect x="7" y="18" width="14" height="2.5" rx="1.25" fill="#01696f" opacity=".4"/>
+        <circle cx="24" cy="22" r="5" fill="#01696f"/>
+        <path d="M21.5 22l2 2 3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="logotext">ProjectPlan</span>
+    </a>
+    <a href="/dashboard.html" class="btn btn-g" style="font-size:var(--xs)">← Dashboard</a>
+  </div>
+  <div class="tbr">
+    <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
+    <a id="timelogLink" href="#" class="btn btn-g">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Time Log
+    </a>
+    <button class="btn btn-g" onclick="window.print()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print
+    </button>
+    <button class="btn btn-g" id="expBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export JSON
+    </button>
+    <button class="btn btn-p" id="saveBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save
+    </button>
+  </div>
+</header>
+
+<main>
+  <div id="alertEl"></div>
+
+  <!-- Project header -->
+  <div class="phdr">
+    <div class="pmeta">
+      <span class="badge b-new" id="statusBadge">New</span>
+      <span style="font-size:var(--xs);color:var(--txtm)">Started: <span id="startDate">—</span></span>
+      <span style="font-size:var(--xs);color:var(--txtm)">Client:
+        <input class="editable" id="projClient" placeholder="Client or context" style="font-size:var(--xs);width:200px">
+      </span>
+    </div>
+    <input class="editable" id="projTitle"
+      style="font-family:var(--fd);font-size:var(--xl);font-style:italic;display:block;width:100%;margin-bottom:.5rem">
+    <textarea class="editable" id="projDesc" rows="2"
+      placeholder="Short description of the application and its goals…"
+      style="font-size:var(--sm);color:var(--txtm);width:100%;max-width:65ch;resize:none;display:block"></textarea>
+  </div>
+
+  <!-- Summary -->
+  <div class="sumgrid">
+    <div class="sumcard">
+      <div class="sumlbl">Overall Progress</div>
+      <div class="sumval" id="oPct">0%</div>
+      <div class="pbar-wrap" style="margin-top:.5rem"><div class="pbar" id="oBar" style="width:0%"></div></div>
+    </div>
+    <div class="sumcard">
+      <div class="sumlbl">Total Tasks</div>
+      <div class="sumval" id="tTotal">0</div>
+      <div class="sumsub" id="tDone">0 completed</div>
+    </div>
+    <div class="sumcard">
+      <div class="sumlbl">Active Phase</div>
+      <div class="sumval" id="aPhName">—</div>
+      <div class="sumsub" id="aPhDesc">Not started</div>
+    </div>
+    <div class="sumcard">
+      <div class="sumlbl">Team</div>
+      <div class="sumval">
+        <input class="editable" id="teamSize" style="width:50px;font-size:var(--lg);font-weight:700">
+        <span style="font-size:var(--sm);font-weight:400;color:var(--txtm)"> members</span>
+      </div>
+      <div class="sumsub"><input class="editable" id="teamLead" placeholder="Lead: name" style="font-size:var(--xs);width:130px"></div>
+    </div>
+  </div>
+
+  <div class="phasesgrid" id="phasesEl"></div>
+
+  <div class="tlsec">
+    <div class="sech">Timeline Overview</div>
+    <div class="tlgrid" id="tlEl"></div>
+  </div>
+</main>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+(function () {
+  if (!requireAuth()) return;
+
+  var projectId = parseInt(new URLSearchParams(window.location.search).get('id'));
+  if (!projectId) { window.location.href = '/dashboard.html'; return; }
+
+  document.getElementById('timelogLink').href = '/timelog.html?id=' + projectId;
+
+  var state = null;
+  var dirty = new Set();
+
+  var alertEl = document.getElementById('alertEl');
+  function showAlert(msg, type) {
+    alertEl.innerHTML = '<div class="alert alert-' + (type || 'err') + '">' + msg + '</div>';
+    if (type === 'ok') setTimeout(function () { alertEl.innerHTML = ''; }, 3000);
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function markDirty(key) { dirty.add(key); }
+
+  // ── Stats ──────────────────────────────────────────────────────────────
+  function updateStats() {
+    var tot = 0, dn = 0, act = null;
+    state.phases.forEach(function (ph) {
+      tot += ph.tasks.length;
+      ph.tasks.forEach(function (t) { if (t.done) dn++; });
+      if (ph.status === 'In Progress' && !act) act = ph;
+    });
+    var pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
+    document.getElementById('oPct').textContent = pct + '%';
+    document.getElementById('oBar').style.width = pct + '%';
+    document.getElementById('tTotal').textContent = tot;
+    document.getElementById('tDone').textContent = dn + ' completed';
+    var badge = document.getElementById('statusBadge');
+    if (act) {
+      document.getElementById('aPhName').textContent = 'Phase ' + (state.phases.indexOf(act) + 1);
+      document.getElementById('aPhDesc').textContent = act.name;
+    } else if (pct === 100 && tot > 0) {
+      document.getElementById('aPhName').textContent = 'Complete';
+      document.getElementById('aPhDesc').textContent = 'All phases done';
+      badge.textContent = 'Complete'; badge.className = 'badge b-done';
+    } else {
+      document.getElementById('aPhName').textContent = '—';
+      document.getElementById('aPhDesc').textContent = 'Not started';
+    }
+  }
+
+  function updPhStats(phaseId) {
+    var ph = state.phases.find(function (p) { return p.id === phaseId; });
+    if (!ph) return;
+    var tot = ph.tasks.length, dn = 0;
+    ph.tasks.forEach(function (t) { if (t.done) dn++; });
+    var pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
+    var pb = document.getElementById('pb' + phaseId); if (pb) pb.style.width = pct + '%';
+    var pp = document.getElementById('pp' + phaseId); if (pp) pp.textContent = pct + '%';
+    var tl = document.getElementById('ptl' + phaseId); if (tl) tl.textContent = 'Tasks (' + dn + '/' + tot + ')';
+    updateStats();
+  }
+
+  // ── Task row ───────────────────────────────────────────────────────────
+  function mkRow(task, phaseId) {
+    var row = document.createElement('div');
+    row.className = 'trow' + (task.done ? ' done' : '');
+    row.id = 'tr' + task.id;
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'tck'; cb.checked = task.done;
+    cb.addEventListener('change', async function () {
+      task.done = cb.checked;
+      if (task.done) row.classList.add('done'); else row.classList.remove('done');
+      updPhStats(phaseId);
+      try {
+        await apiFetch('/tasks/' + task.id, { method: 'PATCH', body: JSON.stringify({ done: task.done }) });
+      } catch (err) {
+        task.done = !task.done; cb.checked = task.done;
+        if (task.done) row.classList.add('done'); else row.classList.remove('done');
+        updPhStats(phaseId);
+        showAlert(err.message);
+      }
+    });
+    row.appendChild(cb);
+
+    var bd = document.createElement('div'); bd.className = 'tbody';
+
+    var nm = document.createElement('div'); nm.className = 'tname';
+    nm.contentEditable = 'true'; nm.spellcheck = false; nm.textContent = task.name;
+    nm.addEventListener('blur', function () {
+      if (task.name !== this.textContent) { task.name = this.textContent; markDirty('task:' + task.id); }
+    });
+    bd.appendChild(nm);
+
+    var meta = document.createElement('div'); meta.className = 'tmeta';
+
+    // Hours logged badge
+    var hrs = parseFloat(task.hours_logged) || 0;
+    if (hrs > 0) {
+      var hb = document.createElement('span'); hb.className = 'hours-badge';
+      hb.textContent = hrs + 'h logged';
+      meta.appendChild(hb);
+    }
+
+    // Assignee
+    var as = document.createElement('span'); as.className = 'tmf';
+    as.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
+    var ai = document.createElement('input'); ai.className = 'editable'; ai.placeholder = 'Assignee';
+    ai.value = task.assignee || ''; ai.style.cssText = 'font-size:var(--xs);width:80px';
+    ai.addEventListener('change', function () { task.assignee = this.value; markDirty('task:' + task.id); });
+    as.appendChild(ai); meta.appendChild(as);
+
+    // Due date
+    var ds = document.createElement('span'); ds.className = 'tmf';
+    ds.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    var di = document.createElement('input'); di.type = 'date'; di.className = 'editable';
+    di.value = task.due_date ? task.due_date.slice(0, 10) : ''; di.style.cssText = 'font-size:var(--xs)';
+    di.addEventListener('change', function () { task.due_date = this.value; markDirty('task:' + task.id); });
+    ds.appendChild(di); meta.appendChild(ds);
+
+    // Priority
+    var pmap = { h: 'ph', m: 'pm', l: 'pl' };
+    var ps = document.createElement('span'); ps.className = 'tmf';
+    var dot = document.createElement('span'); dot.className = 'pdot ' + (pmap[task.priority] || 'pm');
+    ps.appendChild(dot);
+    var psel = document.createElement('select'); psel.className = 'editable';
+    psel.style.cssText = 'font-size:var(--xs);padding:0 4px';
+    [['h','High'],['m','Med'],['l','Low']].forEach(function (o) {
+      var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1];
+      if (o[0] === task.priority) op.selected = true;
+      psel.appendChild(op);
+    });
+    psel.addEventListener('change', function () {
+      task.priority = this.value; dot.className = 'pdot ' + pmap[this.value];
+      markDirty('task:' + task.id);
+    });
+    ps.appendChild(psel); meta.appendChild(ps);
+    bd.appendChild(meta);
+    row.appendChild(bd);
+
+    var acts = document.createElement('div'); acts.className = 'tacts';
+    var db2 = document.createElement('button'); db2.className = 'iBtn del'; db2.title = 'Delete task';
+    db2.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+    db2.addEventListener('click', async function () {
+      if (!confirm('Delete this task?')) return;
+      try {
+        await apiFetch('/tasks/' + task.id, { method: 'DELETE' });
+        var ph = state.phases.find(function (p) { return p.id === phaseId; });
+        if (ph) ph.tasks = ph.tasks.filter(function (t) { return t.id !== task.id; });
+        row.parentNode.removeChild(row);
+        updPhStats(phaseId);
+      } catch (err) { showAlert(err.message); }
+    });
+    acts.appendChild(db2); row.appendChild(acts);
+    return row;
+  }
+
+  // ── Phase card ─────────────────────────────────────────────────────────
+  var tlsColors = ['tl1','tl2','tl3','tl4'];
+
+  function mkCard(ph, idx) {
+    var tot = ph.tasks.length, dn = 0;
+    ph.tasks.forEach(function (t) { if (t.done) dn++; });
+    var pct = tot > 0 ? Math.round(dn / tot * 100) : 0;
+
+    var tlsCls = tlsColors[idx % 4];
+    var card = document.createElement('div');
+    card.className = 'pcard ' + ph.color_class;
+
+    // Header
+    var hd = document.createElement('div'); hd.className = 'phd';
+    var num = document.createElement('div'); num.className = 'pnum'; num.textContent = idx + 1; hd.appendChild(num);
+
+    var info = document.createElement('div'); info.className = 'pinfo';
+    var ti = document.createElement('input'); ti.className = 'editable pti'; ti.value = ph.name;
+    ti.addEventListener('change', function () { ph.name = this.value; markDirty('phase:' + ph.id); renderTL(); });
+    info.appendChild(ti);
+
+    var si = document.createElement('input'); si.className = 'editable psi'; si.value = ph.subtitle || '';
+    si.addEventListener('change', function () { ph.subtitle = this.value; markDirty('phase:' + ph.id); });
+    info.appendChild(si);
+
+    var pr = document.createElement('div'); pr.className = 'pprow';
+    var pw = document.createElement('div'); pw.className = 'ppwrap';
+    var bw = document.createElement('div'); bw.className = 'pbar-wrap';
+    var pb = document.createElement('div'); pb.className = 'pbar'; pb.id = 'pb' + ph.id; pb.style.width = pct + '%';
+    bw.appendChild(pb); pw.appendChild(bw); pr.appendChild(pw);
+    var pl = document.createElement('span'); pl.className = 'pplbl'; pl.id = 'pp' + ph.id; pl.textContent = pct + '%';
+    pr.appendChild(pl); info.appendChild(pr);
+    hd.appendChild(info);
+
+    var pacts = document.createElement('div'); pacts.className = 'pacts';
+    var sel = document.createElement('select'); sel.className = 'ssel';
+    ['Not Started','In Progress','Complete'].forEach(function (s) {
+      var op = document.createElement('option'); op.value = s; op.textContent = s;
+      if (s === ph.status) op.selected = true; sel.appendChild(op);
+    });
+    sel.addEventListener('change', async function () {
+      ph.status = this.value;
+      updateStats();
+      if (this.value === 'In Progress') {
+        var badge = document.getElementById('statusBadge');
+        badge.textContent = 'In Progress'; badge.className = 'badge b-act';
+        var sd = document.getElementById('startDate');
+        if (sd.textContent === '—') sd.textContent = new Date().toLocaleDateString();
+      }
+      try {
+        await apiFetch('/phases/' + ph.id, { method: 'PATCH', body: JSON.stringify({ status: ph.status }) });
+      } catch (err) { showAlert(err.message); }
+    });
+    pacts.appendChild(sel); hd.appendChild(pacts);
+    card.appendChild(hd);
+
+    // Tasks
+    var ts = document.createElement('div'); ts.className = 'tksec';
+    var th = document.createElement('div'); th.className = 'tkh';
+    var tl = document.createElement('span'); tl.className = 'tklbl'; tl.id = 'ptl' + ph.id;
+    tl.textContent = 'Tasks (' + dn + '/' + tot + ')';
+    var ab = document.createElement('button'); ab.className = 'addbtn';
+    ab.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Task';
+    ab.addEventListener('click', function () { addTask(ph.id); });
+    th.appendChild(tl); th.appendChild(ab); ts.appendChild(th);
+    var tlist = document.createElement('div'); tlist.id = 'tl' + ph.id;
+    ph.tasks.forEach(function (t) { tlist.appendChild(mkRow(t, ph.id)); });
+    ts.appendChild(tlist); card.appendChild(ts);
+
+    // Deliverables
+    var ds = document.createElement('div'); ds.className = 'delsec';
+    var dl = document.createElement('div'); dl.className = 'dellbl'; dl.textContent = 'Deliverables'; ds.appendChild(dl);
+    var dw = document.createElement('div'); dw.className = 'deltags'; dw.id = 'dels' + ph.id;
+    ph.deliverables.forEach(function (d) { dw.appendChild(mkDelTag(d, ph.id)); });
+    ds.appendChild(dw);
+    // Add deliverable
+    var da = document.createElement('div'); da.className = 'del-add';
+    var dinput = document.createElement('input'); dinput.placeholder = 'Add deliverable…';
+    var dadd = document.createElement('button'); dadd.className = 'addbtn'; dadd.textContent = '+ Add';
+    dadd.addEventListener('click', function () { addDeliverable(ph.id, dinput); });
+    dinput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addDeliverable(ph.id, dinput); } });
+    da.appendChild(dinput); da.appendChild(dadd); ds.appendChild(da);
+    card.appendChild(ds);
+
+    // Notes
+    var ns = document.createElement('div'); ns.className = 'notesec';
+    var nl = document.createElement('div'); nl.className = 'notelbl'; nl.textContent = 'Phase Notes'; ns.appendChild(nl);
+    var nt = document.createElement('textarea'); nt.className = 'noteta'; nt.rows = 2;
+    nt.placeholder = 'Add notes, blockers, or context…'; nt.value = ph.notes || '';
+    nt.addEventListener('change', function () { ph.notes = this.value; markDirty('phase:' + ph.id); });
+    ns.appendChild(nt); card.appendChild(ns);
+
+    return card;
+  }
+
+  function mkDelTag(del, phaseId) {
+    var span = document.createElement('span'); span.className = 'deltag'; span.id = 'del' + del.id;
+    span.textContent = del.label;
+    var x = document.createElement('span'); x.className = 'deltag-del'; x.textContent = '×';
+    x.addEventListener('click', async function () {
+      try {
+        await apiFetch('/deliverables/' + del.id, { method: 'DELETE' });
+        var ph = state.phases.find(function (p) { return p.id === phaseId; });
+        if (ph) ph.deliverables = ph.deliverables.filter(function (d) { return d.id !== del.id; });
+        var el = document.getElementById('del' + del.id); if (el) el.parentNode.removeChild(el);
+      } catch (err) { showAlert(err.message); }
+    });
+    span.appendChild(x);
+    return span;
+  }
+
+  async function addDeliverable(phaseId, input) {
+    var label = input.value.trim();
+    if (!label) return;
+    try {
+      var del = await apiFetch('/deliverables', { method: 'POST', body: JSON.stringify({ phase_id: phaseId, label: label }) });
+      var ph = state.phases.find(function (p) { return p.id === phaseId; });
+      if (ph) ph.deliverables.push(del);
+      var dw = document.getElementById('dels' + phaseId); if (dw) dw.appendChild(mkDelTag(del, phaseId));
+      input.value = '';
+    } catch (err) { showAlert(err.message); }
+  }
+
+  async function addTask(phaseId) {
+    var nm = prompt('Task name:'); if (!nm || !nm.trim()) return;
+    try {
+      var task = await apiFetch('/tasks', { method: 'POST', body: JSON.stringify({ phase_id: phaseId, name: nm.trim() }) });
+      var ph = state.phases.find(function (p) { return p.id === phaseId; });
+      if (ph) ph.tasks.push(task);
+      var tlist = document.getElementById('tl' + phaseId); if (tlist) tlist.appendChild(mkRow(task, phaseId));
+      updPhStats(phaseId);
+    } catch (err) { showAlert(err.message); }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
+  function renderPhases() {
+    var el = document.getElementById('phasesEl'); el.innerHTML = '';
+    state.phases.forEach(function (ph, i) { el.appendChild(mkCard(ph, i)); });
+  }
+
+  function renderTL() {
+    var el = document.getElementById('tlEl'); el.innerHTML = '';
+    state.phases.forEach(function (ph, i) {
+      var tlsCls = tlsColors[i % 4];
+      var cell = document.createElement('div'); cell.className = 'tlcell ' + tlsCls;
+      var lb = document.createElement('div'); lb.className = 'tlph'; lb.textContent = 'Phase ' + (i + 1); cell.appendChild(lb);
+      var nm = document.createElement('div'); nm.className = 'tlnm'; nm.textContent = ph.name; cell.appendChild(nm);
+      var rw = document.createElement('div'); rw.className = 'tlrng';
+      var ri = document.createElement('input'); ri.className = 'editable'; ri.value = ph.duration || '';
+      ri.style.cssText = 'font-size:var(--xs);width:100%';
+      ri.addEventListener('change', function () { ph.duration = this.value; markDirty('phase:' + ph.id); });
+      rw.appendChild(ri); cell.appendChild(rw);
+      var bar = document.createElement('div'); bar.className = 'tlbar'; cell.appendChild(bar);
+      el.appendChild(cell);
+    });
+  }
+
+  function hydrateHeader() {
+    document.title = (state.title || 'Project') + ' — ProjectPlan';
+    document.getElementById('projTitle').value = state.title || '';
+    document.getElementById('projDesc').value = state.description || '';
+    document.getElementById('projClient').value = state.client || '';
+    document.getElementById('teamSize').value = state.team_size || 1;
+    document.getElementById('teamLead').value = state.team_lead || '';
+
+    var badge = document.getElementById('statusBadge');
+    var statusMap = { 'New': ['New','b-new'], 'In Progress': ['In Progress','b-act'], 'Complete': ['Complete','b-done'] };
+    var sm = statusMap[state.status] || statusMap['New'];
+    badge.textContent = sm[0]; badge.className = 'badge ' + sm[1];
+
+    if (state.created_at) {
+      document.getElementById('startDate').textContent = new Date(state.created_at).toLocaleDateString();
+    }
+
+    ['projTitle','projDesc','projClient','teamSize','teamLead'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', function () { markDirty('project'); });
+    });
+  }
+
+  // ── Save ───────────────────────────────────────────────────────────────
+  document.getElementById('saveBtn').addEventListener('click', async function () {
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      var calls = [];
+      if (dirty.has('project')) {
+        calls.push(apiFetch('/projects/' + projectId, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: document.getElementById('projTitle').value,
+            description: document.getElementById('projDesc').value,
+            client: document.getElementById('projClient').value,
+            team_size: parseInt(document.getElementById('teamSize').value) || 1,
+            team_lead: document.getElementById('teamLead').value
+          })
+        }));
+      }
+      dirty.forEach(function (key) {
+        if (key.startsWith('phase:')) {
+          var phId = parseInt(key.slice(6));
+          var ph = state.phases.find(function (p) { return p.id === phId; });
+          if (ph) calls.push(apiFetch('/phases/' + phId, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: ph.name, subtitle: ph.subtitle, duration: ph.duration, notes: ph.notes })
+          }));
+        }
+        if (key.startsWith('task:')) {
+          var tId = parseInt(key.slice(5));
+          var task = null;
+          state.phases.forEach(function (p) { p.tasks.forEach(function (t) { if (t.id === tId) task = t; }); });
+          if (task) calls.push(apiFetch('/tasks/' + tId, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority })
+          }));
+        }
+      });
+      await Promise.all(calls);
+      dirty.clear();
+      showAlert('Saved successfully', 'ok');
+    } catch (err) {
+      showAlert('Save failed: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
+    }
+  });
+
+  // ── Export ─────────────────────────────────────────────────────────────
+  document.getElementById('expBtn').addEventListener('click', function () {
+    var dat = { project: { title: state.title, description: state.description, client: state.client, team_size: state.team_size, team_lead: state.team_lead, status: state.status }, phases: state.phases };
+    var blob = new Blob([JSON.stringify(dat, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = (state.title || 'project-plan').toLowerCase().replace(/\s+/g, '-') + '.json'; a.click();
+  });
+
+  // ── Load ───────────────────────────────────────────────────────────────
+  async function loadProject() {
+    try {
+      state = await apiFetch('/projects/' + projectId);
+      hydrateHeader();
+      renderPhases();
+      renderTL();
+      updateStats();
+    } catch (err) {
+      showAlert('Failed to load project: ' + err.message);
+    }
+  }
+
+  loadProject();
+})();
+</script>
+</body>
+</html>

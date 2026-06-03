@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Log — ProjectPlan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/shared.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div class="shell">
+<header class="topbar">
+  <div class="tbl">
+    <a href="/dashboard.html" class="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect x="2" y="2" width="28" height="28" rx="6" fill="#01696f" opacity=".12"/>
+        <rect x="7" y="8" width="12" height="2.5" rx="1.25" fill="#01696f"/>
+        <rect x="7" y="13" width="18" height="2.5" rx="1.25" fill="#01696f" opacity=".6"/>
+        <rect x="7" y="18" width="14" height="2.5" rx="1.25" fill="#01696f" opacity=".4"/>
+        <circle cx="24" cy="22" r="5" fill="#01696f"/>
+        <path d="M21.5 22l2 2 3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="logotext">ProjectPlan</span>
+    </a>
+    <a id="backLink" href="#" class="btn btn-g" style="font-size:var(--xs)">← Project</a>
+  </div>
+  <div class="tbr">
+    <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
+    <div class="user-chip">
+      <span class="user-chip-name" id="userName"></span>
+      <span>·</span>
+      <a href="#" id="signOutLink">Sign out</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="alertEl"></div>
+
+  <div class="phdr" style="margin-bottom:var(--s6)">
+    <div class="pmeta">
+      <span class="badge b-new">Time Log</span>
+    </div>
+    <div id="projTitle" style="font-family:var(--fd);font-size:var(--xl);font-style:italic;margin-bottom:.25rem"></div>
+    <div style="font-size:var(--sm);color:var(--txtm)" id="projClient"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="sumgrid" id="summaryEl"></div>
+
+  <!-- Log time form -->
+  <div class="tl-form-card">
+    <div class="notelbl" style="margin-bottom:var(--s4)">Log Time</div>
+    <div class="tl-form-row">
+      <div class="tl-form-group">
+        <label class="form-label">Phase</label>
+        <select class="form-input" id="phaseSelect" style="font-size:var(--xs)"></select>
+      </div>
+      <div class="tl-form-group">
+        <label class="form-label">Task</label>
+        <select class="form-input" id="taskSelect" style="font-size:var(--xs)"></select>
+      </div>
+      <div class="tl-form-group" style="max-width:100px">
+        <label class="form-label">Hours</label>
+        <input class="form-input" type="number" id="hoursInput" min="0.1" step="0.25" placeholder="1.5" style="font-size:var(--xs)">
+      </div>
+      <div class="tl-form-group" style="max-width:160px">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="dateInput" style="font-size:var(--xs)">
+      </div>
+      <div class="tl-form-group" style="flex:2">
+        <label class="form-label">Note (optional)</label>
+        <input class="form-input" type="text" id="noteInput" placeholder="What did you work on?" style="font-size:var(--xs)">
+      </div>
+      <div class="tl-form-group" style="flex:0;align-self:flex-end">
+        <button class="btn btn-p" id="logBtn">Log</button>
+      </div>
+    </div>
+    <div id="formAlert"></div>
+  </div>
+
+  <!-- Entries table -->
+  <div id="entriesEl"></div>
+</main>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+(function () {
+  if (!requireAuth()) return;
+
+  var projectId = parseInt(new URLSearchParams(window.location.search).get('id'));
+  if (!projectId) { window.location.href = '/dashboard.html'; return; }
+
+  document.getElementById('backLink').href = '/project.html?id=' + projectId;
+
+  var user = getUser();
+  if (user) document.getElementById('userName').textContent = user.name;
+
+  document.getElementById('signOutLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    window.location.href = '/login.html';
+  });
+
+  // Set default date to today
+  document.getElementById('dateInput').value = new Date().toISOString().slice(0, 10);
+
+  var projectData = null;
+  var entries = [];
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showAlert(msg, type) {
+    document.getElementById('alertEl').innerHTML = '<div class="alert alert-' + (type || 'err') + '">' + escHtml(msg) + '</div>';
+    if (type === 'ok') setTimeout(function () { document.getElementById('alertEl').innerHTML = ''; }, 3000);
+  }
+
+  function showFormAlert(msg, type) {
+    document.getElementById('formAlert').innerHTML = msg
+      ? '<div class="alert alert-' + (type || 'err') + '" style="margin-top:var(--s3);margin-bottom:0">' + escHtml(msg) + '</div>'
+      : '';
+  }
+
+  // ── Populate phase/task selects ────────────────────────────────────────
+  function populateSelects() {
+    var phSel = document.getElementById('phaseSelect');
+    phSel.innerHTML = '';
+    (projectData.phases || []).forEach(function (ph) {
+      var op = document.createElement('option'); op.value = ph.id; op.textContent = ph.name;
+      phSel.appendChild(op);
+    });
+    updateTaskSelect();
+    phSel.addEventListener('change', updateTaskSelect);
+  }
+
+  function updateTaskSelect() {
+    var phId = parseInt(document.getElementById('phaseSelect').value);
+    var ph = (projectData.phases || []).find(function (p) { return p.id === phId; });
+    var tSel = document.getElementById('taskSelect');
+    tSel.innerHTML = '';
+    if (ph) {
+      ph.tasks.forEach(function (t) {
+        var op = document.createElement('option'); op.value = t.id; op.textContent = t.name;
+        tSel.appendChild(op);
+      });
+    }
+  }
+
+  // ── Summary cards ──────────────────────────────────────────────────────
+  function renderSummary() {
+    var totalHours = 0;
+    var byUser = {}, byPhase = {};
+
+    entries.forEach(function (e) {
+      var h = parseFloat(e.hours) || 0;
+      totalHours += h;
+      byUser[e.user_name] = (byUser[e.user_name] || 0) + h;
+      byPhase[e.phase_name] = (byPhase[e.phase_name] || 0) + h;
+    });
+
+    var cards = [
+      '<div class="sumcard"><div class="sumlbl">Total Hours</div><div class="sumval">' + totalHours.toFixed(1) + '</div><div class="sumsub">' + entries.length + ' entries</div></div>'
+    ];
+
+    Object.keys(byUser).forEach(function (name) {
+      cards.push('<div class="sumcard"><div class="sumlbl">' + escHtml(name) + '</div><div class="sumval">' + byUser[name].toFixed(1) + 'h</div><div class="sumsub">by this person</div></div>');
+    });
+
+    Object.keys(byPhase).forEach(function (name) {
+      cards.push('<div class="sumcard"><div class="sumlbl">' + escHtml(name) + '</div><div class="sumval">' + byPhase[name].toFixed(1) + 'h</div><div class="sumsub">this phase</div></div>');
+    });
+
+    document.getElementById('summaryEl').innerHTML = cards.join('');
+  }
+
+  // ── Entries table ──────────────────────────────────────────────────────
+  function renderEntries() {
+    var el = document.getElementById('entriesEl');
+    if (!entries.length) {
+      el.innerHTML = '<div class="empty-state" style="padding:var(--s10) 0;text-align:center;color:var(--txtm)">No time logged yet. Use the form above to add your first entry.</div>';
+      return;
+    }
+
+    // Group by phase
+    var phases = [];
+    var phaseMap = {};
+    entries.forEach(function (e) {
+      if (!phaseMap[e.phase_id]) {
+        phaseMap[e.phase_id] = { name: e.phase_name, rows: [] };
+        phases.push(e.phase_id);
+      }
+      phaseMap[e.phase_id].rows.push(e);
+    });
+
+    var html = '<div class="tl-section"><table class="tl-table"><thead><tr>' +
+      '<th>Date</th><th>User</th><th>Task</th><th>Hours</th><th>Note</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    phases.forEach(function (phId) {
+      var ph = phaseMap[phId];
+      var phTotal = ph.rows.reduce(function (s, r) { return s + parseFloat(r.hours); }, 0);
+      html += '<tr class="tl-phase-row"><td colspan="6">' + escHtml(ph.name) + ' — ' + phTotal.toFixed(1) + 'h total</td></tr>';
+      ph.rows.forEach(function (e) {
+        var isOwn = user && e.user_id === user.id;
+        html += '<tr data-entry="' + e.id + '">' +
+          '<td>' + (e.date ? e.date.slice(0, 10) : '') + '</td>' +
+          '<td>' + escHtml(e.user_name) + '</td>' +
+          '<td>' + escHtml(e.task_name) + '</td>' +
+          '<td class="tl-hours">' + parseFloat(e.hours).toFixed(1) + 'h</td>' +
+          '<td style="color:var(--txtm)">' + escHtml(e.note) + '</td>' +
+          '<td style="white-space:nowrap">' + (isOwn ? '<button class="iBtn del" style="opacity:1" data-del-entry="' + e.id + '" title="Delete entry"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>' : '') + '</td>' +
+          '</tr>';
+      });
+    });
+
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+
+    el.querySelectorAll('[data-del-entry]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!confirm('Delete this time entry?')) return;
+        try {
+          await apiFetch('/time-entries/' + btn.dataset.delEntry, { method: 'DELETE' });
+          await loadEntries();
+        } catch (err) { showAlert(err.message); }
+      });
+    });
+  }
+
+  // ── Log time ───────────────────────────────────────────────────────────
+  document.getElementById('logBtn').addEventListener('click', async function () {
+    var btn = this;
+    var taskId = parseInt(document.getElementById('taskSelect').value);
+    var hours = parseFloat(document.getElementById('hoursInput').value);
+    var date = document.getElementById('dateInput').value;
+    var note = document.getElementById('noteInput').value.trim();
+
+    if (!taskId) return showFormAlert('Please select a task.');
+    if (!hours || hours <= 0) return showFormAlert('Please enter a valid number of hours.');
+
+    btn.disabled = true; btn.textContent = 'Logging…';
+    showFormAlert('');
+    try {
+      await apiFetch('/time-entries', {
+        method: 'POST',
+        body: JSON.stringify({ task_id: taskId, hours: hours, date: date || null, note: note })
+      });
+      document.getElementById('hoursInput').value = '';
+      document.getElementById('noteInput').value = '';
+      await loadEntries();
+      showFormAlert('Time logged successfully!', 'ok');
+    } catch (err) {
+      showFormAlert(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Log';
+    }
+  });
+
+  // ── Load ───────────────────────────────────────────────────────────────
+  async function loadEntries() {
+    entries = await apiFetch('/time-entries?project_id=' + projectId);
+    renderSummary();
+    renderEntries();
+  }
+
+  async function init() {
+    try {
+      projectData = await apiFetch('/projects/' + projectId);
+      document.getElementById('projTitle').textContent = projectData.title || 'Project';
+      document.getElementById('projClient').textContent = projectData.client || '';
+      document.title = (projectData.title || 'Project') + ' — Time Log';
+      populateSelects();
+      await loadEntries();
+    } catch (err) {
+      showAlert('Failed to load project: ' + err.message);
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

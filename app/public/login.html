@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — ProjectPlan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/shared.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <a href="#" class="auth-logo">
+      <svg width="36" height="36" viewBox="0 0 32 32" fill="none">
+        <rect x="2" y="2" width="28" height="28" rx="6" fill="#01696f" opacity=".12"/>
+        <rect x="7" y="8" width="12" height="2.5" rx="1.25" fill="#01696f"/>
+        <rect x="7" y="13" width="18" height="2.5" rx="1.25" fill="#01696f" opacity=".6"/>
+        <rect x="7" y="18" width="14" height="2.5" rx="1.25" fill="#01696f" opacity=".4"/>
+        <circle cx="24" cy="22" r="5" fill="#01696f"/>
+        <path d="M21.5 22l2 2 3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="logotext" style="font-size:1.4rem">ProjectPlan</span>
+    </a>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Sign In</button>
+      <button class="auth-tab" id="tabRegister">Create Account</button>
+    </div>
+
+    <div id="alertEl"></div>
+
+    <!-- Login form -->
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" name="email" required autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button type="submit" class="form-submit" id="loginBtn">Sign In</button>
+    </form>
+
+    <!-- Register form (hidden initially) -->
+    <form id="registerForm" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" type="text" name="name" required autocomplete="name" placeholder="Jane Smith">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" name="email" required autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" name="password" required autocomplete="new-password" placeholder="At least 6 characters">
+      </div>
+      <button type="submit" class="form-submit" id="registerBtn">Create Account</button>
+    </form>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+(function () {
+  // Already logged in? Skip to dashboard
+  if (localStorage.getItem('token')) {
+    window.location.href = '/dashboard.html';
+    return;
+  }
+
+  var tabLogin = document.getElementById('tabLogin');
+  var tabRegister = document.getElementById('tabRegister');
+  var loginForm = document.getElementById('loginForm');
+  var registerForm = document.getElementById('registerForm');
+  var alertEl = document.getElementById('alertEl');
+
+  function showTab(which) {
+    tabLogin.classList.toggle('active', which === 'login');
+    tabRegister.classList.toggle('active', which === 'register');
+    loginForm.style.display = which === 'login' ? '' : 'none';
+    registerForm.style.display = which === 'register' ? '' : 'none';
+    alertEl.innerHTML = '';
+  }
+
+  tabLogin.addEventListener('click', function () { showTab('login'); });
+  tabRegister.addEventListener('click', function () { showTab('register'); });
+
+  function showError(msg) {
+    alertEl.innerHTML = '<div class="alert alert-err">' + msg + '</div>';
+  }
+
+  function onSuccess(data) {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.location.href = '/dashboard.html';
+  }
+
+  loginForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    try {
+      var data = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: loginForm.email.value,
+          password: loginForm.password.value
+        })
+      });
+      onSuccess(data);
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.textContent = 'Sign In';
+    }
+  });
+
+  registerForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('registerBtn');
+    btn.disabled = true; btn.textContent = 'Creating account…';
+    try {
+      var data = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: registerForm.name.value,
+          email: registerForm.email.value,
+          password: registerForm.password.value
+        })
+      });
+      onSuccess(data);
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
+})();
+</script>
+</body>
+</html>
