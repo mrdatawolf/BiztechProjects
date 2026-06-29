@@ -45,9 +45,21 @@
   </div>
 </header>
 
-<main>
+<main class="main-wide">
   <div id="alertEl"></div>
-  <div id="projGrid" class="proj-grid"></div>
+  <div class="proj-toolbar">
+    <label class="switch">
+      <input type="checkbox" id="myProjectsToggle">
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span>Mine + No PM only</span>
+    </label>
+    <label class="switch">
+      <input type="checkbox" id="showCompletedToggle">
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span>Show completed</span>
+    </label>
+  </div>
+  <div id="projGrid" class="pm-board"></div>
 </main>
 </div>
 
@@ -80,47 +92,117 @@
     return 'b-new';
   }
 
+  var SHOW_COMPLETED_KEY = 'pp_showCompleted';
+  var showCompletedToggle = document.getElementById('showCompletedToggle');
+  showCompletedToggle.checked = localStorage.getItem(SHOW_COMPLETED_KEY) !== '0';
+  showCompletedToggle.addEventListener('change', function () {
+    localStorage.setItem(SHOW_COMPLETED_KEY, showCompletedToggle.checked ? '1' : '0');
+    renderProjects(lastProjects);
+  });
+
+  var VIEW_SCOPE_KEY = 'pp_viewScope';
+  var myProjectsToggle = document.getElementById('myProjectsToggle');
+  myProjectsToggle.checked = localStorage.getItem(VIEW_SCOPE_KEY) === 'mine';
+  myProjectsToggle.addEventListener('change', function () {
+    localStorage.setItem(VIEW_SCOPE_KEY, myProjectsToggle.checked ? 'mine' : 'all');
+    renderProjects(lastProjects);
+  });
+
+  var lastProjects = [];
+  var NO_GROUP_KEY = '￿__none__';
+
+  // Groups items by a key derived from getKey(item); items with a blank key
+  // sort to the end instead of alphabetically, per name-of-the-group ordering.
+  function groupBy(items, getKey) {
+    var map = {};
+    var order = [];
+    items.forEach(function (item) {
+      var name = (getKey(item) || '').trim();
+      var key = name || NO_GROUP_KEY;
+      if (!map[key]) { map[key] = { name: name, items: [] }; order.push(key); }
+      map[key].items.push(item);
+    });
+    var named = order.filter(function (k) { return k !== NO_GROUP_KEY; });
+    named.sort(function (a, b) { return map[a].name.localeCompare(map[b].name, undefined, { sensitivity: 'base' }); });
+    if (map[NO_GROUP_KEY]) named.push(NO_GROUP_KEY);
+    return named.map(function (k) { return map[k]; });
+  }
+
+  function cardHtml(p) {
+    var total = parseInt(p.task_total) || 0;
+    var done = parseInt(p.task_done) || 0;
+    var pct = total > 0 ? Math.round(done / total * 100) : 0;
+    var estHrs = parseFloat(p.est_hours) || 0;
+    var paused = !!p.paused;
+    var displayStatus = paused ? 'Paused' : p.status;
+    var badgeCls = 'badge ' + statusClass(displayStatus) + (paused ? '' : ' badge-cycle');
+    var badgeTitle = paused ? 'Go to project to unpause' : 'Click to change status';
+    return '<div class="proj-card" data-id="' + p.id + '">' +
+      '<div class="proj-card-hd">' +
+        '<div>' +
+          '<div class="proj-title">' + escHtml(p.title) + '</div>' +
+          (p.client ? '<div class="proj-client">' + escHtml(p.client) + '</div>' : '') +
+          (p.team_lead_name ? '<div class="proj-pm">PM: ' + escHtml(p.team_lead_name) + '</div>' : '') +
+        '</div>' +
+        '<span class="' + badgeCls + '" data-badge-id="' + p.id + '" data-status="' + escHtml(p.status) + '" data-paused="' + paused + '" title="' + badgeTitle + '">' + escHtml(displayStatus) + '</span>' +
+      '</div>' +
+      '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%"></div></div>' +
+      '<div class="proj-stats">' +
+        '<span>' + pct + '% complete</span>' +
+        '<span>' + done + ' / ' + total + ' tasks</span>' +
+        (estHrs > 0 ? '<span>~' + estHrs + 'h est</span>' : '') +
+      '</div>' +
+      (paused && p.pause_reason ? '<div style="font-size:var(--xs);color:var(--txtm);padding:var(--s2) 0;border-top:1px solid var(--div)"><span style="font-weight:600;text-transform:uppercase;letter-spacing:.07em">Paused: </span>' + escHtml(p.pause_reason) + '</div>' : '') +
+      '<div class="proj-card-ft">' +
+        '<a href="/project.html?id=' + p.id + '" class="btn btn-g" style="font-size:var(--xs);padding:var(--s1) var(--s3)">Open →</a>' +
+        '<div class="proj-menu">' +
+          '<button class="proj-menu-btn" data-menu="' + p.id + '" aria-label="Project menu">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
+          '</button>' +
+          '<div class="proj-menu-drop" id="menu-' + p.id + '">' +
+            '<button class="proj-menu-item danger" data-del="' + p.id + '" data-title="' + escHtml(p.title) + '">Delete</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderProjects(projects) {
+    lastProjects = projects;
     var grid = document.getElementById('projGrid');
     if (!projects.length) {
+      grid.style.removeProperty('--pm-cols');
       grid.innerHTML = '<div class="empty-state"><h2>No projects yet</h2><p>Create your first project to get started.</p></div>';
       return;
     }
-    grid.innerHTML = projects.map(function (p) {
-      var total = parseInt(p.task_total) || 0;
-      var done = parseInt(p.task_done) || 0;
-      var pct = total > 0 ? Math.round(done / total * 100) : 0;
-      var estHrs = parseFloat(p.est_hours) || 0;
-      var paused = !!p.paused;
-      var displayStatus = paused ? 'Paused' : p.status;
-      var badgeCls = 'badge ' + statusClass(displayStatus) + (paused ? '' : ' badge-cycle');
-      var badgeTitle = paused ? 'Go to project to unpause' : 'Click to change status';
-      return '<div class="proj-card" data-id="' + p.id + '">' +
-        '<div class="proj-card-hd">' +
-          '<div>' +
-            '<div class="proj-title">' + escHtml(p.title) + '</div>' +
-            (p.client ? '<div class="proj-client">' + escHtml(p.client) + '</div>' : '') +
-          '</div>' +
-          '<span class="' + badgeCls + '" data-badge-id="' + p.id + '" data-status="' + escHtml(p.status) + '" data-paused="' + paused + '" title="' + badgeTitle + '">' + escHtml(displayStatus) + '</span>' +
-        '</div>' +
-        '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%"></div></div>' +
-        '<div class="proj-stats">' +
-          '<span>' + pct + '% complete</span>' +
-          '<span>' + done + ' / ' + total + ' tasks</span>' +
-          (estHrs > 0 ? '<span>~' + estHrs + 'h est</span>' : '') +
-        '</div>' +
-        (paused && p.pause_reason ? '<div style="font-size:var(--xs);color:var(--txtm);padding:var(--s2) 0;border-top:1px solid var(--div)"><span style="font-weight:600;text-transform:uppercase;letter-spacing:.07em">Paused: </span>' + escHtml(p.pause_reason) + '</div>' : '') +
-        '<div class="proj-card-ft">' +
-          '<a href="/project.html?id=' + p.id + '" class="btn btn-g" style="font-size:var(--xs);padding:var(--s1) var(--s3)">Open →</a>' +
-          '<div class="proj-menu">' +
-            '<button class="proj-menu-btn" data-menu="' + p.id + '" aria-label="Project menu">' +
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
-            '</button>' +
-            '<div class="proj-menu-drop" id="menu-' + p.id + '">' +
-              '<button class="proj-menu-item danger" data-del="' + p.id + '" data-title="' + escHtml(p.title) + '">Delete</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
+
+    var showCompleted = showCompletedToggle.checked;
+    var myProjectsOnly = myProjectsToggle.checked;
+    var currentUserId = user && user.id;
+    var visible = projects.filter(function (p) {
+      var displayStatus = p.paused ? 'Paused' : p.status;
+      if (!showCompleted && displayStatus === 'Complete') return false;
+      if (myProjectsOnly && p.team_lead_id && String(p.team_lead_id) !== String(currentUserId)) return false;
+      return true;
+    });
+    if (!visible.length) {
+      grid.style.removeProperty('--pm-cols');
+      grid.innerHTML = '<div class="empty-state"><h2>No projects to show</h2><p>Try toggling “Show completed” or “Mine + No PM only” above.</p></div>';
+      return;
+    }
+
+    var pmGroups = groupBy(visible, function (p) { return p.team_lead_name; });
+    grid.style.setProperty('--pm-cols', pmGroups.length);
+    grid.innerHTML = pmGroups.map(function (pmGrp) {
+      var clientGroups = groupBy(pmGrp.items, function (p) { return p.client; });
+      return '<div class="pm-col">' +
+        '<div class="pm-col-hd"><span class="pm-col-name">' + escHtml(pmGrp.name || 'No PM') + '</span><span class="pm-col-count">' + pmGrp.items.length + '</span></div>' +
+        clientGroups.map(function (clientGrp) {
+          return '<div class="pm-client-grp">' +
+            (clientGrp.name ? '<div class="pm-client-hd">' + escHtml(clientGrp.name) + '</div>' : '') +
+            clientGrp.items.map(cardHtml).join('') +
+          '</div>';
+        }).join('') +
       '</div>';
     }).join('');
 
@@ -160,12 +242,13 @@
       badge.addEventListener('click', async function (e) {
         e.stopPropagation();
         if (badge.dataset.paused === 'true') return;
+        var id = badge.dataset.badgeId;
         var next = STATUS_CYCLE[badge.dataset.status] || 'New';
-        badge.dataset.status = next;
-        badge.textContent = next;
-        badge.className = 'badge ' + statusClass(next) + ' badge-cycle';
         try {
-          await apiFetch('/projects/' + badge.dataset.badgeId, { method: 'PATCH', body: JSON.stringify({ status: next }) });
+          await apiFetch('/projects/' + id, { method: 'PATCH', body: JSON.stringify({ status: next }) });
+          var proj = lastProjects.find(function (p) { return String(p.id) === String(id); });
+          if (proj) proj.status = next;
+          renderProjects(lastProjects);
         } catch (err) {
           showAlert(err.message);
           loadProjects();
@@ -173,11 +256,12 @@
       });
     });
 
-    // Close menus on outside click
-    document.addEventListener('click', function () {
-      grid.querySelectorAll('.proj-menu-drop').forEach(function (d) { d.classList.remove('open'); });
-    }, { once: false });
   }
+
+  // Close menus on outside click
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.proj-menu-drop').forEach(function (d) { d.classList.remove('open'); });
+  });
 
   async function loadProjects() {
     try {

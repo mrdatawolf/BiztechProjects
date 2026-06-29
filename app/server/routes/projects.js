@@ -74,15 +74,24 @@ router.post('/import', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid import format — expected { project, phases }' });
   }
   try {
+    let teamLeadId = null;
+    if (project.team_lead && project.team_lead.trim()) {
+      const match = await db.query(
+        'SELECT id FROM users WHERE lower(trim(name)) = lower(trim($1)) LIMIT 1',
+        [project.team_lead]
+      );
+      if (match.rows.length) teamLeadId = match.rows[0].id;
+    }
     const proj = await db.query(
-      `INSERT INTO projects (title, description, client, team_size, team_lead, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO projects (title, description, client, team_size, team_lead, team_lead_id, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         project.title || 'Imported Project',
         project.description || '',
         project.client || '',
         project.team_size || 1,
         project.team_lead || '',
+        teamLeadId,
         project.status || 'New',
         req.user.id
       ]
@@ -133,11 +142,12 @@ router.post('/import', requireAuth, async (req, res) => {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT p.*,
+      SELECT p.*, lead.name AS team_lead_name,
         COALESCE(tc.total, 0)     AS task_total,
         COALESCE(tc.done, 0)      AS task_done,
         COALESCE(tc.est_hours, 0) AS est_hours
       FROM projects p
+      LEFT JOIN users lead ON lead.id = p.team_lead_id
       LEFT JOIN (
         SELECT ph.project_id,
                COUNT(t.id)                        AS total,
@@ -200,7 +210,13 @@ router.post('/', requireAuth, async (req, res) => {
 router.get('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
-    const projResult = await db.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const projResult = await db.query(
+      `SELECT p.*, lead.name AS team_lead_name
+       FROM projects p
+       LEFT JOIN users lead ON lead.id = p.team_lead_id
+       WHERE p.id = $1`,
+      [id]
+    );
     if (!projResult.rows.length) return res.status(404).json({ error: 'Project not found' });
     const project = projResult.rows[0];
 
@@ -225,10 +241,15 @@ router.get('/:id', requireAuth, async (req, res) => {
         'SELECT * FROM deliverables WHERE phase_id = $1 ORDER BY position',
         [phase.id]
       );
+      const hwResult = await db.query(
+        'SELECT * FROM hardware WHERE phase_id = $1 ORDER BY position',
+        [phase.id]
+      );
       phases.push({
         ...phase,
         tasks: tasksResult.rows,
-        deliverables: delsResult.rows
+        deliverables: delsResult.rows,
+        hardware: hwResult.rows
       });
     }
 
@@ -242,13 +263,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 // PATCH /api/projects/:id
 router.patch('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status', 'paused', 'pause_reason'];
+  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead_id', 'status', 'paused', 'pause_reason'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push(`updated_at = now()`);
-  const values = fields.map(f => req.body[f]);
+  const values = fields.map(f => f === 'team_lead_id' ? (req.body[f] || null) : req.body[f]);
   values.push(id);
 
   try {

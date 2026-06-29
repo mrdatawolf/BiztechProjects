@@ -12,10 +12,12 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/users',        require('./routes/users'));
 app.use('/api/projects',     require('./routes/projects'));
 app.use('/api/phases',       require('./routes/phases'));
 app.use('/api/tasks',        require('./routes/tasks'));
 app.use('/api/deliverables', require('./routes/deliverables'));
+app.use('/api/hardware',     require('./routes/hardware'));
 app.use('/api/time-entries', require('./routes/timeEntries'));
 app.use('/api/links',        require('./routes/links'));
 app.use('/api/backup',       require('./routes/backup'));

@@ -97,7 +97,7 @@
         <input class="editable" id="teamSize" style="width:50px;font-size:var(--lg);font-weight:700">
         <span style="font-size:var(--sm);font-weight:400;color:var(--txtm)"> members</span>
       </div>
-      <div class="sumsub"><input class="editable" id="teamLead" placeholder="Lead: name" style="font-size:var(--xs);width:130px"></div>
+      <div class="sumsub"><select class="editable" id="teamLead" style="font-size:var(--xs);width:130px"><option value="">Unassigned</option></select></div>
     </div>
     <div class="sumcard">
       <div class="sumlbl">Est. Hours</div>
@@ -129,6 +129,23 @@
 
   var state = null;
   var dirty = new Set();
+  var userMap = {};
+
+  async function loadUsers() {
+    try {
+      var users = await apiFetch('/users');
+      var select = document.getElementById('teamLead');
+      users.forEach(function (u) {
+        userMap[u.id] = u.name;
+        var opt = document.createElement('option');
+        opt.value = u.id;
+        opt.textContent = u.name;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      showAlert('Failed to load users: ' + err.message);
+    }
+  }
 
   var alertEl = document.getElementById('alertEl');
   function showAlert(msg, type) {
@@ -428,6 +445,21 @@
     da.appendChild(dinput); da.appendChild(dadd); ds.appendChild(da);
     card.appendChild(ds);
 
+    // Hardware
+    var hs = document.createElement('div'); hs.className = 'hwsec';
+    var hl = document.createElement('div'); hl.className = 'hwlbl'; hl.textContent = 'Hardware'; hs.appendChild(hl);
+    var hw = document.createElement('div'); hw.className = 'hwtags'; hw.id = 'hws' + ph.id;
+    (ph.hardware || []).forEach(function (h) { hw.appendChild(mkHwTag(h, ph.id)); });
+    hs.appendChild(hw);
+    // Add hardware
+    var ha = document.createElement('div'); ha.className = 'del-add';
+    var hinput = document.createElement('input'); hinput.placeholder = 'Add hardware item…';
+    var hadd = document.createElement('button'); hadd.className = 'addbtn'; hadd.textContent = '+ Add';
+    hadd.addEventListener('click', function () { addHardware(ph.id, hinput); });
+    hinput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addHardware(ph.id, hinput); } });
+    ha.appendChild(hinput); ha.appendChild(hadd); hs.appendChild(ha);
+    card.appendChild(hs);
+
     // Notes
     var ns = document.createElement('div'); ns.className = 'notesec';
     var nl = document.createElement('div'); nl.className = 'notelbl'; nl.textContent = 'Phase Notes'; ns.appendChild(nl);
@@ -463,6 +495,45 @@
       var ph = state.phases.find(function (p) { return p.id === phaseId; });
       if (ph) ph.deliverables.push(del);
       var dw = document.getElementById('dels' + phaseId); if (dw) dw.appendChild(mkDelTag(del, phaseId));
+      input.value = '';
+    } catch (err) { showAlert(err.message); }
+  }
+
+  function mkHwTag(hw, phaseId) {
+    var span = document.createElement('span');
+    span.className = 'hwtag' + (hw.delivered ? ' hwtag-done' : '');
+    span.id = 'hw' + hw.id;
+    var lbl = document.createElement('span'); lbl.className = 'hwtag-lbl'; lbl.textContent = hw.label;
+    var dbtn = document.createElement('button'); dbtn.className = 'hwtag-deliver'; dbtn.textContent = hw.delivered ? 'Delivered' : 'Deliver';
+    dbtn.addEventListener('click', async function () {
+      try {
+        var updated = await apiFetch('/hardware/' + hw.id + '/delivered', { method: 'PATCH' });
+        hw.delivered = updated.delivered;
+        span.className = 'hwtag' + (hw.delivered ? ' hwtag-done' : '');
+        dbtn.textContent = hw.delivered ? 'Delivered' : 'Deliver';
+      } catch (err) { showAlert(err.message); }
+    });
+    var x = document.createElement('span'); x.className = 'deltag-del'; x.textContent = '×';
+    x.addEventListener('click', async function () {
+      try {
+        await apiFetch('/hardware/' + hw.id, { method: 'DELETE' });
+        var ph = state.phases.find(function (p) { return p.id === phaseId; });
+        if (ph) ph.hardware = ph.hardware.filter(function (h) { return h.id !== hw.id; });
+        var el = document.getElementById('hw' + hw.id); if (el) el.parentNode.removeChild(el);
+      } catch (err) { showAlert(err.message); }
+    });
+    span.appendChild(lbl); span.appendChild(dbtn); span.appendChild(x);
+    return span;
+  }
+
+  async function addHardware(phaseId, input) {
+    var label = input.value.trim();
+    if (!label) return;
+    try {
+      var item = await apiFetch('/hardware', { method: 'POST', body: JSON.stringify({ phase_id: phaseId, label: label }) });
+      var ph = state.phases.find(function (p) { return p.id === phaseId; });
+      if (ph) { if (!ph.hardware) ph.hardware = []; ph.hardware.push(item); }
+      var hw = document.getElementById('hws' + phaseId); if (hw) hw.appendChild(mkHwTag(item, phaseId));
       input.value = '';
     } catch (err) { showAlert(err.message); }
   }
@@ -556,7 +627,7 @@
           description: document.getElementById('projDesc').value,
           client: document.getElementById('projClient').value,
           team_size: parseInt(document.getElementById('teamSize').value) || 1,
-          team_lead: document.getElementById('teamLead').value,
+          team_lead_id: document.getElementById('teamLead').value || null,
           status: state.status,
           paused: state.paused,
           pause_reason: prEl.value
@@ -595,7 +666,9 @@
     document.getElementById('projDesc').value = state.description || '';
     document.getElementById('projClient').value = state.client || '';
     document.getElementById('teamSize').value = state.team_size || 1;
-    document.getElementById('teamLead').value = state.team_lead || '';
+    var teamLeadSel = document.getElementById('teamLead');
+    teamLeadSel.value = state.team_lead_id ? String(state.team_lead_id) : '';
+    if (teamLeadSel.selectedIndex === -1) teamLeadSel.value = '';
 
     var badge = document.getElementById('statusBadge');
     applyBadge(badge, state.status, state.paused);
@@ -648,11 +721,15 @@
       } catch (err) { showAlert(err.message); }
     });
 
-    ['projTitle','projDesc','projClient','teamSize','teamLead'].forEach(function (id) {
+    ['projTitle','projDesc','projClient','teamSize'].forEach(function (id) {
       document.getElementById(id).addEventListener('blur', function () {
         markDirty('project');
         saveProjectFields();
       });
+    });
+    document.getElementById('teamLead').addEventListener('change', function () {
+      markDirty('project');
+      saveProjectFields();
     });
   }
 
@@ -676,7 +753,7 @@
             description: document.getElementById('projDesc').value,
             client: document.getElementById('projClient').value,
             team_size: parseInt(document.getElementById('teamSize').value) || 1,
-            team_lead: document.getElementById('teamLead').value,
+            team_lead_id: document.getElementById('teamLead').value || null,
             status: state.status,
             paused: state.paused,
             pause_reason: document.getElementById('pauseReason').value
@@ -715,7 +792,7 @@
 
   // ── Export ─────────────────────────────────────────────────────────────
   document.getElementById('expBtn').addEventListener('click', function () {
-    var dat = { project: { title: state.title, description: state.description, client: state.client, team_size: state.team_size, team_lead: state.team_lead, status: state.status }, phases: state.phases };
+    var dat = { project: { title: state.title, description: state.description, client: state.client, team_size: state.team_size, team_lead: userMap[state.team_lead_id] || '', status: state.status }, phases: state.phases };
     var blob = new Blob([JSON.stringify(dat, null, 2)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = (state.title || 'project-plan').toLowerCase().replace(/\s+/g, '-') + '.json'; a.click();
@@ -734,7 +811,7 @@
     }
   }
 
-  loadProject();
+  loadUsers().then(loadProject);
 })();
 </script>
 </body>
