@@ -91,7 +91,11 @@
   tabRegister.addEventListener('click', function () { showTab('register'); });
 
   function showError(msg) {
-    alertEl.innerHTML = '<div class="alert alert-err">' + msg + '</div>';
+    var div = document.createElement('div');
+    div.className = 'alert alert-err';
+    div.textContent = msg;
+    alertEl.innerHTML = '';
+    alertEl.appendChild(div);
   }
 
   function onSuccess(data) {

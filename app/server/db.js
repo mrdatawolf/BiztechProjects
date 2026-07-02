@@ -24,6 +24,7 @@ async function initDb() {
       client       TEXT NOT NULL DEFAULT '',
       team_size    INTEGER NOT NULL DEFAULT 1,
       team_lead    TEXT NOT NULL DEFAULT '',
+      team_lead_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       status       TEXT NOT NULL DEFAULT 'New'
                      CHECK (status IN ('New','In Progress','Complete')),
       priority     TEXT NOT NULL DEFAULT 'medium'
@@ -68,6 +69,14 @@ async function initDb() {
       label     TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS hardware (
+      id        SERIAL PRIMARY KEY,
+      phase_id  INTEGER NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+      position  INTEGER NOT NULL DEFAULT 0,
+      label     TEXT NOT NULL,
+      delivered BOOLEAN NOT NULL DEFAULT false
+    );
+
     CREATE TABLE IF NOT EXISTS time_entries (
       id         SERIAL PRIMARY KEY,
       task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -105,6 +114,21 @@ async function migrateDb() {
       label      TEXT NOT NULL,
       url        TEXT NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS hardware (
+      id        SERIAL PRIMARY KEY,
+      phase_id  INTEGER NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+      position  INTEGER NOT NULL DEFAULT 0,
+      label     TEXT NOT NULL,
+      delivered BOOLEAN NOT NULL DEFAULT false
+    )`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_lead_id INTEGER REFERENCES users(id) ON DELETE SET NULL`,
+    // Backfill: link legacy free-text team_lead to a real user by name match.
+    // Rows that don't match any user stay NULL and surface as "No PM".
+    `UPDATE projects p SET team_lead_id = u.id
+     FROM users u
+     WHERE p.team_lead_id IS NULL
+       AND trim(p.team_lead) <> ''
+       AND lower(trim(u.name)) = lower(trim(p.team_lead))`,
   ];
   for (const sql of steps) {
     await db.query(sql);

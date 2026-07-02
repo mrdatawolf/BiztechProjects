@@ -2,6 +2,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validateId } = require('../middleware/validateId');
 
 const router = express.Router();
 
@@ -67,60 +68,137 @@ const DEFAULT_PHASES = [
   }
 ];
 
+// Minimal alternative to DEFAULT_PHASES for users who don't want the full
+// four-phase methodology scaffold — one blank phase, one blank task.
+const SIMPLE_PHASE = [
+  {
+    position: 0, name: 'Phase 1', color_class: 'p1',
+    subtitle: '', duration: '',
+    deliverables: [],
+    tasks: [
+      { position: 0, name: 'First task', priority: 'm' }
+    ]
+  }
+];
+
+const PROJECT_STATUSES = ['New', 'In Progress', 'Complete'];
+const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+const PHASE_STATUSES = ['Not Started', 'In Progress', 'Complete'];
+const TASK_PRIORITIES = ['h', 'm', 'l'];
+
 // POST /api/projects/import
 router.post('/import', requireAuth, async (req, res) => {
-  const { project, phases } = req.body;
+  const { project, phases, links = [] } = req.body;
   if (!project || !Array.isArray(phases)) {
     return res.status(400).json({ error: 'Invalid import format — expected { project, phases }' });
   }
-  try {
-    const proj = await db.query(
-      `INSERT INTO projects (title, description, client, team_size, team_lead, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [
-        project.title || 'Imported Project',
-        project.description || '',
-        project.client || '',
-        project.team_size || 1,
-        project.team_lead || '',
-        project.status || 'New',
-        req.user.id
-      ]
-    );
-    const newProject = proj.rows[0];
 
-    for (let pi = 0; pi < phases.length; pi++) {
-      const ph = phases[pi];
-      const phRow = await db.query(
-        `INSERT INTO phases (project_id, position, name, subtitle, duration, status, notes, color_class)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+  // Project-level fields fail the whole import loudly rather than silently
+  // coercing to a default — the file is either well-formed or it isn't.
+  const status = project.status || 'New';
+  if (!PROJECT_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `project.status must be one of: ${PROJECT_STATUSES.join(', ')}` });
+  }
+  const priority = project.priority || 'medium';
+  if (!PROJECT_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: `project.priority must be one of: ${PROJECT_PRIORITIES.join(', ')}` });
+  }
+  let teamSize = 1;
+  if (project.team_size !== undefined && project.team_size !== null && project.team_size !== '') {
+    teamSize = parseInt(project.team_size, 10);
+    if (!Number.isInteger(teamSize) || teamSize <= 0) {
+      return res.status(400).json({ error: 'project.team_size must be a positive integer' });
+    }
+  }
+
+  try {
+    const newProject = await db.transaction(async (tx) => {
+      let teamLeadId = null;
+      if (project.team_lead && project.team_lead.trim()) {
+        const match = await tx.query(
+          'SELECT id FROM users WHERE lower(trim(name)) = lower(trim($1)) LIMIT 1',
+          [project.team_lead]
+        );
+        if (match.rows.length) teamLeadId = match.rows[0].id;
+      }
+      const proj = await tx.query(
+        `INSERT INTO projects
+           (title, description, client, team_size, team_lead, team_lead_id,
+            status, priority, due_date, paused, pause_reason, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
         [
-          newProject.id, pi,
-          ph.name || '', ph.subtitle || '', ph.duration || '',
-          ph.status || 'Not Started', ph.notes || '',
-          ph.color_class || 'p1'
+          project.title || 'Imported Project',
+          project.description || '',
+          project.client || '',
+          teamSize,
+          project.team_lead || '',
+          teamLeadId,
+          status,
+          priority,
+          project.due_date || null,
+          !!project.paused,
+          project.pause_reason || '',
+          req.user.id
         ]
       );
-      const phaseId = phRow.rows[0].id;
+      const created = proj.rows[0];
 
-      for (let ti = 0; ti < (ph.tasks || []).length; ti++) {
-        const t = ph.tasks[ti];
-        await db.query(
-          `INSERT INTO tasks (phase_id, position, name, assignee, due_date, priority, done, expected_hours)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [phaseId, ti, t.name || '', t.assignee || '', t.due_date || null,
-           t.priority || 'm', t.done || false, t.expected_hours || null]
+      for (let pi = 0; pi < phases.length; pi++) {
+        const ph = phases[pi];
+        // A single malformed phase/task shouldn't sink the whole import —
+        // fall back to the schema default instead of rejecting the file.
+        const phaseStatus = PHASE_STATUSES.includes(ph.status) ? ph.status : 'Not Started';
+        const phRow = await tx.query(
+          `INSERT INTO phases (project_id, position, name, subtitle, duration, status, notes, color_class)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [
+            created.id, pi,
+            ph.name || '', ph.subtitle || '', ph.duration || '',
+            phaseStatus, ph.notes || '',
+            ph.color_class || 'p1'
+          ]
+        );
+        const phaseId = phRow.rows[0].id;
+
+        for (let ti = 0; ti < (ph.tasks || []).length; ti++) {
+          const t = ph.tasks[ti];
+          const taskPriority = TASK_PRIORITIES.includes(t.priority) ? t.priority : 'm';
+          await tx.query(
+            `INSERT INTO tasks (phase_id, position, name, assignee, due_date, priority, done, expected_hours)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [phaseId, ti, t.name || '', t.assignee || '', t.due_date || null,
+             taskPriority, t.done || false, t.expected_hours || null]
+          );
+        }
+
+        for (let di = 0; di < (ph.deliverables || []).length; di++) {
+          const d = ph.deliverables[di];
+          await tx.query(
+            `INSERT INTO deliverables (phase_id, position, label) VALUES ($1, $2, $3)`,
+            [phaseId, di, d.label || '']
+          );
+        }
+
+        for (let hi = 0; hi < (ph.hardware || []).length; hi++) {
+          const h = ph.hardware[hi];
+          await tx.query(
+            `INSERT INTO hardware (phase_id, position, label, delivered) VALUES ($1, $2, $3, $4)`,
+            [phaseId, hi, h.label || '', !!h.delivered]
+          );
+        }
+      }
+
+      for (let li = 0; li < links.length; li++) {
+        const l = links[li];
+        if (!l || !l.label || !l.url) continue;
+        await tx.query(
+          `INSERT INTO project_links (project_id, position, label, url) VALUES ($1, $2, $3, $4)`,
+          [created.id, li, l.label, l.url]
         );
       }
 
-      for (let di = 0; di < (ph.deliverables || []).length; di++) {
-        const d = ph.deliverables[di];
-        await db.query(
-          `INSERT INTO deliverables (phase_id, position, label) VALUES ($1, $2, $3)`,
-          [phaseId, di, d.label || '']
-        );
-      }
-    }
+      return created;
+    });
 
     res.status(201).json(newProject);
   } catch (err) {
@@ -133,11 +211,12 @@ router.post('/import', requireAuth, async (req, res) => {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT p.*,
+      SELECT p.*, lead.name AS team_lead_name,
         COALESCE(tc.total, 0)     AS task_total,
         COALESCE(tc.done, 0)      AS task_done,
         COALESCE(tc.est_hours, 0) AS est_hours
       FROM projects p
+      LEFT JOIN users lead ON lead.id = p.team_lead_id
       LEFT JOIN (
         SELECT ph.project_id,
                COUNT(t.id)                        AS total,
@@ -158,36 +237,41 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/projects — create project + seed phases/tasks/deliverables
 router.post('/', requireAuth, async (req, res) => {
-  const { title = 'New Application Project', description = '', client = '' } = req.body;
+  const { title = 'New Application Project', description = '', client = '', template } = req.body;
+  const phasesToSeed = template === 'simple' ? SIMPLE_PHASE : DEFAULT_PHASES;
   try {
-    const proj = await db.query(
-      `INSERT INTO projects (title, description, client, created_by)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [title, description, client, req.user.id]
-    );
-    const project = proj.rows[0];
-
-    for (const ph of DEFAULT_PHASES) {
-      const phRow = await db.query(
-        `INSERT INTO phases (project_id, position, name, subtitle, duration, color_class)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [project.id, ph.position, ph.name, ph.subtitle, ph.duration, ph.color_class]
+    const project = await db.transaction(async (tx) => {
+      const proj = await tx.query(
+        `INSERT INTO projects (title, description, client, created_by)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [title, description, client, req.user.id]
       );
-      const phaseId = phRow.rows[0].id;
+      const created = proj.rows[0];
 
-      for (const t of ph.tasks) {
-        await db.query(
-          `INSERT INTO tasks (phase_id, position, name, priority) VALUES ($1, $2, $3, $4)`,
-          [phaseId, t.position, t.name, t.priority]
+      for (const ph of phasesToSeed) {
+        const phRow = await tx.query(
+          `INSERT INTO phases (project_id, position, name, subtitle, duration, color_class)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [created.id, ph.position, ph.name, ph.subtitle, ph.duration, ph.color_class]
         );
+        const phaseId = phRow.rows[0].id;
+
+        for (const t of ph.tasks) {
+          await tx.query(
+            `INSERT INTO tasks (phase_id, position, name, priority) VALUES ($1, $2, $3, $4)`,
+            [phaseId, t.position, t.name, t.priority]
+          );
+        }
+        for (let i = 0; i < ph.deliverables.length; i++) {
+          await tx.query(
+            `INSERT INTO deliverables (phase_id, position, label) VALUES ($1, $2, $3)`,
+            [phaseId, i, ph.deliverables[i]]
+          );
+        }
       }
-      for (let i = 0; i < ph.deliverables.length; i++) {
-        await db.query(
-          `INSERT INTO deliverables (phase_id, position, label) VALUES ($1, $2, $3)`,
-          [phaseId, i, ph.deliverables[i]]
-        );
-      }
-    }
+
+      return created;
+    });
 
     res.status(201).json(project);
   } catch (err) {
@@ -197,10 +281,16 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // GET /api/projects/:id — full nested project
-router.get('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.get('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
-    const projResult = await db.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const projResult = await db.query(
+      `SELECT p.*, lead.name AS team_lead_name
+       FROM projects p
+       LEFT JOIN users lead ON lead.id = p.team_lead_id
+       WHERE p.id = $1`,
+      [id]
+    );
     if (!projResult.rows.length) return res.status(404).json({ error: 'Project not found' });
     const project = projResult.rows[0];
 
@@ -225,14 +315,24 @@ router.get('/:id', requireAuth, async (req, res) => {
         'SELECT * FROM deliverables WHERE phase_id = $1 ORDER BY position',
         [phase.id]
       );
+      const hwResult = await db.query(
+        'SELECT * FROM hardware WHERE phase_id = $1 ORDER BY position',
+        [phase.id]
+      );
       phases.push({
         ...phase,
         tasks: tasksResult.rows,
-        deliverables: delsResult.rows
+        deliverables: delsResult.rows,
+        hardware: hwResult.rows
       });
     }
 
-    res.json({ ...project, phases });
+    const linksResult = await db.query(
+      'SELECT * FROM project_links WHERE project_id = $1 ORDER BY position',
+      [id]
+    );
+
+    res.json({ ...project, phases, links: linksResult.rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load project' });
@@ -240,15 +340,15 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/projects/:id
-router.patch('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
-  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead', 'status', 'paused', 'pause_reason'];
+router.patch('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
+  const allowed = ['title', 'description', 'client', 'team_size', 'team_lead_id', 'status', 'paused', 'pause_reason'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 1}`);
   sets.push(`updated_at = now()`);
-  const values = fields.map(f => req.body[f]);
+  const values = fields.map(f => f === 'team_lead_id' ? (req.body[f] || null) : req.body[f]);
   values.push(id);
 
   try {
@@ -265,8 +365,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/projects/:id
-router.delete('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     await db.query('DELETE FROM projects WHERE id = $1', [id]);
     res.json({ ok: true });
