@@ -68,6 +68,19 @@ const DEFAULT_PHASES = [
   }
 ];
 
+// Minimal alternative to DEFAULT_PHASES for users who don't want the full
+// four-phase methodology scaffold — one blank phase, one blank task.
+const SIMPLE_PHASE = [
+  {
+    position: 0, name: 'Phase 1', color_class: 'p1',
+    subtitle: '', duration: '',
+    deliverables: [],
+    tasks: [
+      { position: 0, name: 'First task', priority: 'm' }
+    ]
+  }
+];
+
 const PROJECT_STATUSES = ['New', 'In Progress', 'Complete'];
 const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Complete'];
@@ -224,7 +237,8 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/projects — create project + seed phases/tasks/deliverables
 router.post('/', requireAuth, async (req, res) => {
-  const { title = 'New Application Project', description = '', client = '' } = req.body;
+  const { title = 'New Application Project', description = '', client = '', template } = req.body;
+  const phasesToSeed = template === 'simple' ? SIMPLE_PHASE : DEFAULT_PHASES;
   try {
     const project = await db.transaction(async (tx) => {
       const proj = await tx.query(
@@ -234,7 +248,7 @@ router.post('/', requireAuth, async (req, res) => {
       );
       const created = proj.rows[0];
 
-      for (const ph of DEFAULT_PHASES) {
+      for (const ph of phasesToSeed) {
         const phRow = await tx.query(
           `INSERT INTO phases (project_id, position, name, subtitle, duration, color_class)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,

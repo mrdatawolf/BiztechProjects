@@ -144,17 +144,19 @@ curl http://localhost:3000/api/projects -H "Authorization: Bearer $TOKEN"
 
 ### `POST /api/projects`
 
-Creates a project and seeds it with the default four phases
+Creates a project and seeds it with either the default four-phase scaffold
 (Discovery & Planning, Design & Prototyping, Development & Integration,
-Testing/Deployment & Handoff), each with its standard tasks and
-deliverables.
+Testing/Deployment & Handoff, each with its standard tasks and deliverables)
+or a minimal one-phase, one-task starting point, depending on `template`.
 
-Body (all optional): `title`, `description`, `client`.
+Body (all optional): `title`, `description`, `client`, `template` (`"full"` —
+default — or `"simple"`, which creates a single blank "Phase 1" with one
+task named "First task" and no deliverables).
 
 ```bash
 curl -X POST http://localhost:3000/api/projects \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"title":"New Client Site","client":"Acme Co"}'
+  -d '{"title":"New Client Site","client":"Acme Co","template":"simple"}'
 ```
 
 ```json

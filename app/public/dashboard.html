@@ -39,10 +39,16 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="15"/></svg>
       Import JSON
     </button>
-    <button class="btn btn-p" id="newProjectBtn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      New Project
-    </button>
+    <div class="proj-menu">
+      <button class="btn btn-p" id="newProjectBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Project
+      </button>
+      <div class="proj-menu-drop proj-menu-drop-wide" id="newProjectDrop">
+        <button class="proj-menu-item" data-template="full">Scaffolded — 4 phases</button>
+        <button class="proj-menu-item" data-template="simple">Simple — 1 phase, 1 task</button>
+      </div>
+    </div>
     <div class="user-chip">
       <span class="user-chip-name" id="userName"></span>
       <span>·</span>
@@ -309,17 +315,28 @@
     }
   });
 
-  document.getElementById('newProjectBtn').addEventListener('click', async function () {
-    var btn = this;
-    btn.disabled = true; btn.textContent = 'Creating…';
-    try {
-      var project = await apiFetch('/projects', { method: 'POST', body: JSON.stringify({}) });
-      window.location.href = '/project.html?id=' + project.id;
-    } catch (err) {
-      showAlert(err.message);
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Project';
-    }
+  var newProjectBtn = document.getElementById('newProjectBtn');
+  var newProjectDrop = document.getElementById('newProjectDrop');
+  var newProjectBtnHtml = newProjectBtn.innerHTML;
+
+  newProjectBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    newProjectDrop.classList.toggle('open');
+  });
+
+  newProjectDrop.querySelectorAll('[data-template]').forEach(function (item) {
+    item.addEventListener('click', async function () {
+      newProjectDrop.classList.remove('open');
+      newProjectBtn.disabled = true; newProjectBtn.textContent = 'Creating…';
+      try {
+        var project = await apiFetch('/projects', { method: 'POST', body: JSON.stringify({ template: item.dataset.template }) });
+        window.location.href = '/project.html?id=' + project.id;
+      } catch (err) {
+        showAlert(err.message);
+        newProjectBtn.disabled = false;
+        newProjectBtn.innerHTML = newProjectBtnHtml;
+      }
+    });
   });
 
   function escHtml(s) {

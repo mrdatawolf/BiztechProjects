@@ -196,6 +196,7 @@ main.main-wide{max-width:none}
 .proj-menu-btn:hover{color:var(--txtm);background:var(--surfoff)}
 .proj-menu-drop{position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rmd);box-shadow:var(--sh2);min-width:120px;z-index:10;display:none}
 .proj-menu-drop.open{display:block}
+.proj-menu-drop-wide{min-width:220px;white-space:nowrap}
 .proj-menu-item{display:block;width:100%;text-align:left;padding:var(--s2) var(--s4);font-size:var(--sm);color:var(--txt);transition:background var(--tr)}
 .proj-menu-item:hover{background:var(--surfoff)}
 .proj-menu-item.danger{color:var(--err)}
