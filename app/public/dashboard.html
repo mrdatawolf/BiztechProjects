@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" data-density="comfortable">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/shared.css">
 <script src="/js/theme.js"></script>
+<script src="/js/density.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -27,6 +28,11 @@
     </a>
   </div>
   <div class="tbr">
+    <label class="switch">
+      <input type="checkbox" id="densityToggle">
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span>Compact view</span>
+    </label>
     <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
     <input type="file" id="importFile" accept=".json" style="display:none">
     <button class="btn btn-g" id="importBtn">
@@ -143,7 +149,7 @@
     var badgeTitle = paused ? 'Go to project to unpause' : 'Click to change status';
     return '<div class="proj-card" data-id="' + p.id + '">' +
       '<div class="proj-card-hd">' +
-        '<div>' +
+        '<div class="proj-info">' +
           '<div class="proj-title">' + escHtml(p.title) + '</div>' +
           (p.client ? '<div class="proj-client">' + escHtml(p.client) + '</div>' : '') +
           (p.team_lead_name ? '<div class="proj-pm">PM: ' + escHtml(p.team_lead_name) + '</div>' : '') +
@@ -156,7 +162,7 @@
         '<span>' + done + ' / ' + total + ' tasks</span>' +
         (estHrs > 0 ? '<span>~' + estHrs + 'h est</span>' : '') +
       '</div>' +
-      (paused && p.pause_reason ? '<div style="font-size:var(--xs);color:var(--txtm);padding:var(--s2) 0;border-top:1px solid var(--div)"><span style="font-weight:600;text-transform:uppercase;letter-spacing:.07em">Paused: </span>' + escHtml(p.pause_reason) + '</div>' : '') +
+      (paused && p.pause_reason ? '<div class="proj-pause-note" style="font-size:var(--xs);color:var(--txtm);padding:var(--s2) 0;border-top:1px solid var(--div)"><span style="font-weight:600;text-transform:uppercase;letter-spacing:.07em">Paused: </span>' + escHtml(p.pause_reason) + '</div>' : '') +
       '<div class="proj-card-ft">' +
         '<a href="/project.html?id=' + p.id + '" class="btn btn-g" style="font-size:var(--xs);padding:var(--s1) var(--s3)">Open →</a>' +
         '<div class="proj-menu">' +

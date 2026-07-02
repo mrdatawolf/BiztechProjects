@@ -246,6 +246,49 @@ main.main-wide{max-width:none}
 /* ── Hours badge on task row ────────────────────────────────────────────── */
 .hours-badge{font-size:var(--xs);color:var(--pri);font-weight:600;background:var(--prihl);padding:1px var(--s2);border-radius:var(--rfl)}
 
+/* ── Compact density ────────────────────────────────────────────────────── */
+/* Dashboard: collapse each project card into a single row showing only
+   name, company, status, Open, and the actions menu. */
+[data-density="compact"] .pm-board{gap:var(--s3)}
+[data-density="compact"] .pm-col{gap:var(--s2)}
+[data-density="compact"] .proj-card{flex-direction:row;align-items:center;gap:var(--s4);padding:var(--s2) var(--s4)}
+[data-density="compact"] .proj-card-hd{flex:1;min-width:0}
+[data-density="compact"] .proj-info{min-width:0}
+[data-density="compact"] .proj-title{max-width:30em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+[data-density="compact"] .proj-pm,
+[data-density="compact"] .proj-card .pbar-wrap,
+[data-density="compact"] .proj-stats,
+[data-density="compact"] .proj-pause-note{display:none}
+[data-density="compact"] .proj-card-ft{margin-top:0}
+
+/* Project page: use the full screen width, tighten padding/margins, and lay
+   Tasks out beside Deliverables/Hardware/Notes instead of stacking all four
+   full-width — makes better use of a wide monitor. */
+[data-density="compact"] main{padding:var(--s4) var(--s4);max-width:none}
+[data-density="compact"] .phdr{margin-bottom:var(--s4)}
+[data-density="compact"] .sumgrid{gap:var(--s2);margin-bottom:var(--s4)}
+[data-density="compact"] .sumcard{padding:var(--s2) var(--s3)}
+[data-density="compact"] .phasesgrid{gap:var(--s3)}
+[data-density="compact"] .phd{padding:var(--s3) var(--s4)}
+[data-density="compact"] .trow{padding:var(--s2) 0}
+[data-density="compact"] .tlsec{margin-top:var(--s6)}
+[data-density="compact"] .tlcell{padding:var(--s3)}
+
+[data-density="compact"] .pcard{
+  display:grid;
+  grid-template-columns:1.6fr 1fr;
+  grid-template-areas:"head head" "tasks del" "tasks hw" "tasks notes";
+}
+[data-density="compact"] .phd{grid-area:head}
+[data-density="compact"] .tksec{grid-area:tasks;padding:var(--s3) var(--s4);border-right:1px solid var(--div)}
+[data-density="compact"] .delsec{grid-area:del;padding:var(--s3) var(--s4)}
+[data-density="compact"] .hwsec{grid-area:hw;padding:var(--s3) var(--s4)}
+[data-density="compact"] .notesec{grid-area:notes;padding:var(--s3) var(--s4)}
+@media(max-width:900px){
+  [data-density="compact"] .pcard{grid-template-columns:1fr;grid-template-areas:"head" "tasks" "del" "hw" "notes"}
+  [data-density="compact"] .tksec{border-right:none}
+}
+
 /* ── Print ──────────────────────────────────────────────────────────────── */
 @media print{.topbar{position:static}.btn,.tbtn,.addbtn,.iBtn{display:none!important}.pcard{break-inside:avoid;box-shadow:none}main{padding:0;max-width:100%}}
 

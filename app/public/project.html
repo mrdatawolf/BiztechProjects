@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" data-density="comfortable">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/shared.css">
 <script src="/js/theme.js"></script>
+<script src="/js/density.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -28,6 +29,11 @@
     <a href="/dashboard.html" class="btn btn-g" style="font-size:var(--xs)">← Dashboard</a>
   </div>
   <div class="tbr">
+    <label class="switch">
+      <input type="checkbox" id="densityToggle">
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span>Compact view</span>
+    </label>
     <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
     <!--<a id="timelogLink" href="#" class="btn btn-g">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
