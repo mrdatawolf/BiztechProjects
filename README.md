@@ -1,13 +1,13 @@
 # ProjectPlan
 
-A self-hosted, multi-user project management tool for software development teams. Track projects through structured phases, manage tasks and deliverables, log time, and monitor progress — all from a clean web interface with no external dependencies.
+A self-hosted, multi-user project management tool for software development teams. Track projects through structured phases, manage tasks and deliverables, log time, and monitor progress — all from a clean web interface, with your data and authentication running entirely on your own machine.
 
 ---
 
 ## Features
 
 - **Phase-based project structure** — Projects are organized into phases (Discovery, Design, Development, Deployment by default), each with tasks, deliverables, and notes
-- **Task management** — Assignee, due date, priority, estimated hours, and completion tracking per task; drag-and-drop reordering within and between phases
+- **Task management** — Assignee, due date, priority, estimated hours, and completion tracking per task; drag-and-drop reordering within a phase
 - **Progress tracking** — Per-phase and project-wide completion percentages update in real time as tasks are checked off
 - **Estimated hours** — Set estimated hours per task; phase and project totals roll up automatically
 - **Project status** — Click the status badge to cycle New → In Progress → Complete; mark a project Paused with an optional reason
@@ -18,7 +18,7 @@ A self-hosted, multi-user project management tool for software development teams
 - **Multi-user** — JWT-based authentication with per-user project creation
 - **Light / dark theme** — Persisted per browser
 - **Print** — Clean print layout for sharing project plans
-- **Zero cloud dependency** — Runs entirely on your machine; data stored in an embedded PostgreSQL database (PGlite)
+- **Local-first** — Data and auth run entirely on your machine in an embedded PostgreSQL database (PGlite); the UI fonts (Inter, Instrument Serif) are fetched from Google Fonts and fall back to system fonts if you're offline
 
 ---
 
@@ -61,13 +61,13 @@ Copy the example env file and edit it:
 cp .env.example .env
 ```
 
-At minimum, set a strong `JWT_SECRET`:
+`JWT_SECRET` is generated automatically on first run and saved back to `.env` if it's left blank or unset, so no manual step is required. If you'd rather set your own, generate one with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Paste the output as the value for `JWT_SECRET` in `.env`.
+and paste the output as the value for `JWT_SECRET` in `.env`.
 
 ### 3. Start the server
 
@@ -102,7 +102,7 @@ All configuration lives in `.env` at the project root.
 | `HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` to restrict to localhost. |
 | `PORT` | `3000` | Port the server listens on. |
 | `DB_PATH` | `Data/projectdb` | Path to the PGlite database directory, relative to the project root. Use `memory://` for a throw-away in-memory database. |
-| `JWT_SECRET` | *(required)* | Secret used to sign login tokens. Must be kept private. |
+| `JWT_SECRET` | *(auto-generated)* | Secret used to sign login tokens. Must be kept private. Generated on first run and saved to `.env` if left blank. |
 | `JWT_EXPIRES_IN` | `7d` | Session duration (e.g. `7d`, `24h`, `60m`). |
 
 ---
@@ -122,14 +122,18 @@ BiztechProjects/
 │   └── server/             # Backend (Express)
 │       ├── index.js        # Entry point — DB init + route registration
 │       ├── db.js           # PGlite connection, initDb, migrateDb
+│       ├── seed.js         # Demo data seeder
 │       ├── middleware/
-│       │   └── auth.js     # JWT middleware
+│       │   ├── auth.js       # JWT middleware
+│       │   └── validateId.js # :id param validation
 │       └── routes/
 │           ├── auth.js
+│           ├── users.js
 │           ├── projects.js
 │           ├── phases.js
 │           ├── tasks.js
 │           ├── deliverables.js
+│           ├── hardware.js
 │           ├── timeEntries.js
 │           ├── links.js
 │           └── backup.js
@@ -159,7 +163,7 @@ To update to a new version:
 
 ## Exporting and Importing Projects
 
-**Export:** Open a project → click **Export JSON** in the toolbar. Saves a full JSON snapshot of the project including all phases, tasks, deliverables, and notes.
+**Export:** Open a project → click **Export JSON** in the toolbar. Saves a full JSON snapshot of the project including all phases, tasks, deliverables, hardware, notes, and project links.
 
 **Import:** From the dashboard, click **Import JSON** and select a previously exported file. The project is created immediately and you are taken to it.
 

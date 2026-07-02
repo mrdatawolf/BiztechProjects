@@ -2,6 +2,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validateId } = require('../middleware/validateId');
 
 const router = express.Router();
 
@@ -27,8 +28,8 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/hardware/:id/delivered — toggle delivered
-router.patch('/:id/delivered', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.patch('/:id/delivered', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     const result = await db.query(
       'UPDATE hardware SET delivered = NOT delivered WHERE id = $1 RETURNING *',
@@ -43,8 +44,8 @@ router.patch('/:id/delivered', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/hardware/:id
-router.delete('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     await db.query('DELETE FROM hardware WHERE id = $1', [id]);
     res.json({ ok: true });

@@ -2,6 +2,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validateId } = require('../middleware/validateId');
 
 const router = express.Router();
 
@@ -65,11 +66,18 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/time-entries/:id — only owner can edit
-router.patch('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.patch('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   const allowed = ['hours', 'date', 'note'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
+
+  if (fields.includes('hours')) {
+    const hours = parseFloat(req.body.hours);
+    if (isNaN(hours) || hours <= 0) {
+      return res.status(400).json({ error: 'hours must be a positive number' });
+    }
+  }
 
   try {
     const check = await db.query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
@@ -79,7 +87,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     }
 
     const sets = fields.map((f, i) => `${f} = $${i + 1}`);
-    const values = fields.map(f => req.body[f]);
+    const values = fields.map(f => f === 'hours' ? parseFloat(req.body[f]) : req.body[f]);
     values.push(id);
 
     const result = await db.query(
@@ -94,8 +102,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/time-entries/:id — only owner can delete
-router.delete('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     const check = await db.query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
     if (!check.rows.length) return res.status(404).json({ error: 'Entry not found' });

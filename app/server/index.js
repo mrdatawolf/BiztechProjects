@@ -1,13 +1,38 @@
 'use strict';
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const fs = require('fs');
+const crypto = require('crypto');
+const ENV_PATH = path.join(__dirname, '../../.env');
+require('dotenv').config({ path: ENV_PATH });
 const express = require('express');
-const cors = require('cors');
 const { initDb, migrateDb } = require('./db');
+
+const PLACEHOLDER_SECRET = 'replace_with_a_long_random_string';
+
+// Fresh installs get JWT_SECRET from .env.example's placeholder — generate and
+// persist a real one so a default install isn't forgeable by anyone who has
+// read the public repo.
+function ensureJwtSecret() {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET !== PLACEHOLDER_SECRET) return;
+
+  const secret = crypto.randomBytes(48).toString('hex');
+  const existing = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf8') : '';
+  const line = `JWT_SECRET=${secret}`;
+  let updated;
+  if (/^JWT_SECRET=.*$/m.test(existing)) {
+    updated = existing.replace(/^JWT_SECRET=.*$/m, line);
+  } else {
+    updated = existing.replace(/\n?$/, '') + `\n${line}\n`;
+  }
+  fs.writeFileSync(ENV_PATH, updated);
+  process.env.JWT_SECRET = secret;
+  console.log(`[ProjectPlan] Generated a new JWT_SECRET and saved it to ${ENV_PATH}`);
+}
+
+ensureJwtSecret();
 
 const app = express();
 
-app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -21,6 +46,12 @@ app.use('/api/hardware',     require('./routes/hardware'));
 app.use('/api/time-entries', require('./routes/timeEntries'));
 app.use('/api/links',        require('./routes/links'));
 app.use('/api/backup',       require('./routes/backup'));
+
+// Unmatched API routes get a JSON 404 instead of falling through to the
+// login-page catch-all below.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 
 // Serve login page for any unmatched GET (direct URL navigation)
 app.get('*', (req, res) => {

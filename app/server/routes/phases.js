@@ -2,6 +2,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validateId } = require('../middleware/validateId');
 
 const router = express.Router();
 
@@ -10,9 +11,11 @@ router.post('/reorder', requireAuth, async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
   try {
-    for (let i = 0; i < ids.length; i++) {
-      await db.query('UPDATE phases SET position = $1 WHERE id = $2', [i, ids[i]]);
-    }
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < ids.length; i++) {
+        await tx.query('UPDATE phases SET position = $1 WHERE id = $2', [i, ids[i]]);
+      }
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -43,8 +46,8 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/phases/:id
-router.patch('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.patch('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   const allowed = ['name', 'subtitle', 'duration', 'status', 'notes', 'color_class'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
@@ -67,8 +70,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/phases/:id
-router.delete('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     await db.query('DELETE FROM phases WHERE id = $1', [id]);
     res.json({ ok: true });

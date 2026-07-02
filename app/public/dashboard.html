@@ -80,7 +80,11 @@
 
   var alertEl = document.getElementById('alertEl');
   function showAlert(msg, type) {
-    alertEl.innerHTML = '<div class="alert alert-' + (type || 'err') + '">' + msg + '</div>';
+    var div = document.createElement('div');
+    div.className = 'alert alert-' + (type || 'err');
+    div.textContent = msg;
+    alertEl.innerHTML = '';
+    alertEl.appendChild(div);
     if (type === 'ok') setTimeout(function () { alertEl.innerHTML = ''; }, 3000);
   }
 

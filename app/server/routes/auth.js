@@ -32,8 +32,8 @@ router.post('/register', async (req, res) => {
     const user = result.rows[0];
     res.status(201).json({ token: signToken(user), user });
   } catch (err) {
-    if (err.message && err.message.includes('unique')) {
-      return res.status(400).json({ error: 'An account with that email already exists' });
+    if (err.code === '23505' || (err.message && err.message.includes('unique'))) {
+      return res.status(409).json({ error: 'An account with that email already exists' });
     }
     console.error(err);
     res.status(500).json({ error: 'Registration failed' });

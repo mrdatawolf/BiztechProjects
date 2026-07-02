@@ -149,7 +149,11 @@
 
   var alertEl = document.getElementById('alertEl');
   function showAlert(msg, type) {
-    alertEl.innerHTML = '<div class="alert alert-' + (type || 'err') + '">' + msg + '</div>';
+    var div = document.createElement('div');
+    div.className = 'alert alert-' + (type || 'err');
+    div.textContent = msg;
+    alertEl.innerHTML = '';
+    alertEl.appendChild(div);
     if (type === 'ok') setTimeout(function () { alertEl.innerHTML = ''; }, 3000);
   }
 
@@ -792,7 +796,16 @@
 
   // ── Export ─────────────────────────────────────────────────────────────
   document.getElementById('expBtn').addEventListener('click', function () {
-    var dat = { project: { title: state.title, description: state.description, client: state.client, team_size: state.team_size, team_lead: userMap[state.team_lead_id] || '', status: state.status }, phases: state.phases };
+    var dat = {
+      project: {
+        title: state.title, description: state.description, client: state.client,
+        team_size: state.team_size, team_lead: userMap[state.team_lead_id] || '',
+        status: state.status, priority: state.priority, due_date: state.due_date,
+        paused: state.paused, pause_reason: state.pause_reason
+      },
+      phases: state.phases,
+      links: (state.links || []).map(function (l) { return { label: l.label, url: l.url }; })
+    };
     var blob = new Blob([JSON.stringify(dat, null, 2)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = (state.title || 'project-plan').toLowerCase().replace(/\s+/g, '-') + '.json'; a.click();

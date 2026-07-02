@@ -2,6 +2,7 @@
 const express = require('express');
 const { db, touchProject } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validateId } = require('../middleware/validateId');
 
 const router = express.Router();
 
@@ -30,8 +31,8 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/links/:id
-router.patch('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.patch('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   const allowed = ['label', 'url'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' });
@@ -53,8 +54,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/links/:id
-router.delete('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', requireAuth, validateId, async (req, res) => {
+  const id = req.idParam;
   try {
     const proj = await db.query('SELECT project_id FROM project_links WHERE id = $1', [id]);
     await db.query('DELETE FROM project_links WHERE id = $1', [id]);
