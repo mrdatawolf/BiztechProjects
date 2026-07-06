@@ -112,6 +112,13 @@
     </div>
   </div>
 
+  <div class="phsec-hd">
+    <div class="sech" style="margin-bottom:0">Phases</div>
+    <button class="btn btn-g" id="addPhaseBtn" style="font-size:var(--xs)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Phase
+    </button>
+  </div>
   <div class="phasesgrid" id="phasesEl"></div>
 
   <div class="tlsec">
@@ -559,6 +566,19 @@
     } catch (err) { showAlert(err.message); }
   }
 
+  async function addPhase() {
+    var nm = prompt('Phase name:'); if (!nm || !nm.trim()) return;
+    var colorClass = 'p' + ((state.phases.length % 4) + 1);
+    try {
+      var phase = await apiFetch('/phases', { method: 'POST', body: JSON.stringify({ project_id: projectId, name: nm.trim(), color_class: colorClass }) });
+      phase.tasks = []; phase.deliverables = []; phase.hardware = [];
+      state.phases.push(phase);
+      document.getElementById('phasesEl').appendChild(mkCard(phase, state.phases.length - 1));
+      renderTL();
+      updateStats();
+    } catch (err) { showAlert(err.message); }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────
   function renderPhases() {
     var el = document.getElementById('phasesEl'); el.innerHTML = '';
@@ -799,6 +819,8 @@
       btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
     }
   });
+
+  document.getElementById('addPhaseBtn').addEventListener('click', addPhase);
 
   // ── Export ─────────────────────────────────────────────────────────────
   document.getElementById('expBtn').addEventListener('click', function () {

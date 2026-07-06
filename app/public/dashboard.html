@@ -144,6 +144,12 @@
     return named.map(function (k) { return map[k]; });
   }
 
+  function hueFromString(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+    return Math.abs(h) % 360;
+  }
+
   function cardHtml(p) {
     var total = parseInt(p.task_total) || 0;
     var done = parseInt(p.task_done) || 0;
@@ -153,7 +159,11 @@
     var displayStatus = paused ? 'Paused' : p.status;
     var badgeCls = 'badge ' + statusClass(displayStatus) + (paused ? '' : ' badge-cycle');
     var badgeTitle = paused ? 'Go to project to unpause' : 'Click to change status';
-    return '<div class="proj-card" data-id="' + p.id + '">' +
+    var pmHue = p.team_lead_name ? hueFromString(p.team_lead_name) : null;
+    var coHue = p.client ? hueFromString(p.client) : null;
+    var bandCls = (pmHue !== null ? ' band-pm' : '') + (coHue !== null ? ' band-co' : '');
+    var bandStyle = (pmHue !== null ? '--pm-h:' + pmHue + ';' : '') + (coHue !== null ? '--co-h:' + coHue + ';' : '');
+    return '<div class="proj-card' + bandCls + '" data-id="' + p.id + '" style="' + bandStyle + '">' +
       '<div class="proj-card-hd">' +
         '<div class="proj-info">' +
           '<div class="proj-title">' + escHtml(p.title) + '</div>' +
