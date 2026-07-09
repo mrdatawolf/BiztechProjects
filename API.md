@@ -1,4 +1,4 @@
-# API.md — ProjectPlan REST API
+# ProjectPlan REST API
 
 All endpoints are served under `/api` on the ProjectPlan server (default
 `http://localhost:3000`). Request and response bodies are JSON.
