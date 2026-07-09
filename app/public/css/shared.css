@@ -80,6 +80,7 @@ main.main-wide{max-width:none}
 .sumsub{font-size:var(--xs);color:var(--txtm);margin-top:var(--s1)}
 
 /* ── Phase cards ────────────────────────────────────────────────────────── */
+.phsec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
 .phasesgrid{display:flex;flex-direction:column;gap:var(--s6)}
 .pcard{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);overflow:hidden;box-shadow:var(--sh1);transition:box-shadow var(--tr)}
 .pcard:hover{box-shadow:var(--sh2)}
@@ -183,8 +184,13 @@ main.main-wide{max-width:none}
 .pm-client-grp{display:flex;flex-direction:column;gap:var(--s3)}
 .pm-client-hd{font-size:var(--xs);font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txtf)}
 .proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:var(--s6);margin-top:var(--s6)}
-.proj-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);padding:var(--s5) var(--s6);box-shadow:var(--sh1);transition:box-shadow var(--tr);display:flex;flex-direction:column;gap:var(--s3);text-decoration:none;color:var(--txt)}
+.proj-card{position:relative;overflow:hidden;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);padding:var(--s5) var(--s6);box-shadow:var(--sh1);transition:box-shadow var(--tr);display:flex;flex-direction:column;gap:var(--s3);text-decoration:none;color:var(--txt)}
 .proj-card:hover{box-shadow:var(--sh2)}
+.proj-card.band-pm::before,.proj-card.band-co::after{content:'';position:absolute;top:0;bottom:0;width:4px}
+.proj-card.band-pm::before{left:0;background:hsl(var(--pm-h) 55% 82%)}
+.proj-card.band-co::after{right:0;background:hsl(var(--co-h) 55% 82%)}
+[data-theme="dark"] .proj-card.band-pm::before{background:hsl(var(--pm-h) 35% 20%)}
+[data-theme="dark"] .proj-card.band-co::after{background:hsl(var(--co-h) 35% 20%)}
 .proj-card-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3)}
 .proj-title{font-family:var(--fd);font-size:var(--lg);font-style:italic;line-height:1.3}
 .proj-client{font-size:var(--xs);color:var(--txtm)}

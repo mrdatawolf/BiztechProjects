@@ -46,6 +46,10 @@ app.use('/api/hardware',     require('./routes/hardware'));
 app.use('/api/time-entries', require('./routes/timeEntries'));
 app.use('/api/links',        require('./routes/links'));
 app.use('/api/backup',       require('./routes/backup'));
+app.use('/api/docs',         require('./routes/docs'));
+
+// Bare /api in a browser lands on the docs.
+app.get('/api', (req, res) => res.redirect('/api/docs'));
 
 // Unmatched API routes get a JSON 404 instead of falling through to the
 // login-page catch-all below.
