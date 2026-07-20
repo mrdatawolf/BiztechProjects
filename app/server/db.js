@@ -94,6 +94,17 @@ async function initDb() {
       label      TEXT NOT NULL,
       url        TEXT NOT NULL
     );
+
+    -- definition holds a JSON-encoded array of phases (same shape as the
+    -- built-in DEFAULT_PHASES/SIMPLE_PHASE seeds in routes/projects.js),
+    -- stored as TEXT rather than JSONB to keep param binding simple.
+    CREATE TABLE IF NOT EXISTS templates (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      definition TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
   `);
 }
 

@@ -200,14 +200,39 @@ main.main-wide{max-width:none}
 .proj-menu{position:relative}
 .proj-menu-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--rsm);color:var(--txtf);transition:color var(--tr),background var(--tr)}
 .proj-menu-btn:hover{color:var(--txtm);background:var(--surfoff)}
-.proj-menu-drop{position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rmd);box-shadow:var(--sh2);min-width:120px;z-index:10;display:none}
+/* position:fixed (coords set by JS at open-time) so the menu escapes the
+   .proj-card's overflow:hidden — that hidden is load-bearing for clipping
+   the band-pm/band-co corner accents, so it can't just be removed. */
+.proj-menu-drop{position:fixed;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rmd);box-shadow:var(--sh2);min-width:120px;z-index:1000;display:none}
 .proj-menu-drop.open{display:block}
 .proj-menu-drop-wide{min-width:220px;white-space:nowrap}
 .proj-menu-item{display:block;width:100%;text-align:left;padding:var(--s2) var(--s4);font-size:var(--sm);color:var(--txt);transition:background var(--tr)}
 .proj-menu-item:hover{background:var(--surfoff)}
 .proj-menu-item.danger{color:var(--err)}
 .proj-menu-item.danger:hover{background:var(--errhl)}
+.proj-menu-sep{height:1px;background:var(--div);margin:var(--s1) 0}
 .empty-state{text-align:center;padding:var(--s16) var(--s6);color:var(--txtm)}
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:var(--s6);z-index:2000}
+.modal{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);box-shadow:var(--sh3);width:100%;max-width:400px;padding:var(--s6)}
+.modal-wide{max-width:560px}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s5);font-family:var(--fd);font-size:var(--lg);font-style:italic;color:var(--txt)}
+.modal-x{width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:var(--rsm);color:var(--txtf);font-size:var(--lg);line-height:1;transition:color var(--tr),background var(--tr)}
+.modal-x:hover{color:var(--txtm);background:var(--surfoff)}
+.modal-body{margin-bottom:var(--s6)}
+.modal-ft{display:flex;justify-content:flex-end;gap:var(--s3)}
+.modal-input{width:100%;border:1px solid var(--bdr);border-radius:var(--rsm);padding:var(--s2) var(--s3);margin-top:var(--s2);background:var(--surf2)}
+.modal-input:focus{border-color:var(--pri);outline:none}
+.modal-list{display:flex;flex-direction:column;gap:var(--s2);max-height:340px;overflow-y:auto}
+.modal-list-empty{color:var(--txtm);font-size:var(--sm);text-align:center;padding:var(--s6) 0}
+.modal-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3);border:1px solid var(--bdr);border-radius:var(--rmd)}
+.modal-row-name{font-weight:600;font-size:var(--sm)}
+.modal-row-meta{font-size:var(--xs);color:var(--txtm)}
+.modal-row-actions{display:flex;gap:var(--s1);flex-shrink:0}
+.modal-row-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:var(--rsm);color:var(--txtf);transition:color var(--tr),background var(--tr)}
+.modal-row-btn:hover{background:var(--surfoff);color:var(--txtm)}
+.modal-row-btn.danger:hover{background:var(--errhl);color:var(--err)}
 .empty-state h2{font-family:var(--fd);font-style:italic;font-size:var(--lg);margin-bottom:var(--s3);color:var(--txt)}
 
 /* ── Auth card ──────────────────────────────────────────────────────────── */

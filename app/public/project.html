@@ -47,6 +47,10 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export JSON
     </button>
+    <button class="btn btn-g" id="saveTemplateBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Save as Template
+    </button>
     <span id="saveStatus" style="font-size:var(--xs);color:var(--txtm);opacity:0;transition:opacity .5s"></span>
     <button class="btn btn-p" id="saveBtn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -54,6 +58,23 @@
     </button>
   </div>
 </header>
+
+<div class="modal-backdrop" id="templateModalBackdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-hd">
+      <span>Save as Template</span>
+      <button class="modal-x" id="templateModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label" for="templateNameInput">Template name</label>
+      <input class="modal-input" id="templateNameInput" placeholder="e.g. Client Website Build">
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-g" id="templateModalCancel">Cancel</button>
+      <button class="btn btn-p" id="templateModalSave">Save Template</button>
+    </div>
+  </div>
+</div>
 
 <main>
   <div id="alertEl"></div>
@@ -837,6 +858,55 @@
     var blob = new Blob([JSON.stringify(dat, null, 2)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = (state.title || 'project-plan').toLowerCase().replace(/\s+/g, '-') + '.json'; a.click();
+  });
+
+  // ── Save as Template ──────────────────────────────────────────────────
+  var templateModalBackdrop = document.getElementById('templateModalBackdrop');
+  var templateNameInput = document.getElementById('templateNameInput');
+  var templateModalSaveBtn = document.getElementById('templateModalSave');
+
+  function openTemplateModal() {
+    templateNameInput.value = '';
+    templateModalBackdrop.style.display = 'flex';
+    templateNameInput.focus();
+  }
+  function closeTemplateModal() {
+    templateModalBackdrop.style.display = 'none';
+  }
+
+  document.getElementById('saveTemplateBtn').addEventListener('click', openTemplateModal);
+  document.getElementById('templateModalClose').addEventListener('click', closeTemplateModal);
+  document.getElementById('templateModalCancel').addEventListener('click', closeTemplateModal);
+  templateModalBackdrop.addEventListener('click', function (e) {
+    if (e.target === templateModalBackdrop) closeTemplateModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && templateModalBackdrop.style.display !== 'none') closeTemplateModal();
+  });
+  templateNameInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') templateModalSaveBtn.click();
+  });
+
+  templateModalSaveBtn.addEventListener('click', async function () {
+    var name = templateNameInput.value.trim();
+    if (!name) { templateNameInput.focus(); return; }
+    templateModalSaveBtn.disabled = true;
+    try {
+      var definition = (state.phases || []).map(function (ph, pi) {
+        return {
+          position: pi, name: ph.name, subtitle: ph.subtitle, duration: ph.duration, color_class: ph.color_class,
+          tasks: (ph.tasks || []).map(function (t, ti) { return { position: ti, name: t.name, priority: t.priority }; }),
+          deliverables: (ph.deliverables || []).map(function (d) { return d.label; })
+        };
+      });
+      await apiFetch('/templates', { method: 'POST', body: JSON.stringify({ name: name, definition: definition }) });
+      closeTemplateModal();
+      showAlert('Template "' + name + '" saved.', 'ok');
+    } catch (err) {
+      showAlert(err.message);
+    } finally {
+      templateModalSaveBtn.disabled = false;
+    }
   });
 
   // ── Load ───────────────────────────────────────────────────────────────
