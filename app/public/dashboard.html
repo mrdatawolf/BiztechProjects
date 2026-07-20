@@ -57,6 +57,18 @@
   </div>
 </header>
 
+<div class="modal-backdrop" id="manageTemplatesBackdrop" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-hd">
+      <span>Manage Templates</span>
+      <button class="modal-x" id="manageTemplatesClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-list" id="templatesList"></div>
+    </div>
+  </div>
+</div>
+
 <main class="main-wide">
   <div id="alertEl"></div>
   <div class="proj-toolbar">
@@ -123,6 +135,42 @@
     localStorage.setItem(VIEW_SCOPE_KEY, myProjectsToggle.checked ? 'mine' : 'all');
     renderProjects(lastProjects);
   });
+
+  // Menus are position:fixed (see shared.css) so they can escape the
+  // clipping of ancestors like .proj-card, which needs overflow:hidden for
+  // its own corner accents. Since that decouples them from their trigger
+  // button, we position them by hand here at open-time.
+  function closeAllMenus() {
+    document.querySelectorAll('.proj-menu-drop.open').forEach(function (d) { d.classList.remove('open'); });
+  }
+
+  function openMenu(btn, drop) {
+    closeAllMenus();
+    drop.style.visibility = 'hidden';
+    drop.classList.add('open');
+    var btnRect = btn.getBoundingClientRect();
+    var dropRect = drop.getBoundingClientRect();
+    var left = Math.min(btnRect.right - dropRect.width, window.innerWidth - dropRect.width - 8);
+    left = Math.max(8, left);
+    var top = btnRect.bottom + 4;
+    if (top + dropRect.height > window.innerHeight - 8) {
+      top = btnRect.top - dropRect.height - 4;
+    }
+    drop.style.left = left + 'px';
+    drop.style.top = top + 'px';
+    drop.style.visibility = '';
+  }
+
+  function toggleMenu(btn, drop) {
+    var wasOpen = drop.classList.contains('open');
+    closeAllMenus();
+    if (!wasOpen) openMenu(btn, drop);
+  }
+
+  // A fixed-position menu goes stale relative to its button on scroll, so
+  // just close it rather than track the button around.
+  window.addEventListener('scroll', closeAllMenus, true);
+  window.addEventListener('resize', closeAllMenus);
 
   var lastProjects = [];
   var NO_GROUP_KEY = '￿__none__';
@@ -245,7 +293,7 @@
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var drop = document.getElementById('menu-' + btn.dataset.menu);
-        drop.classList.toggle('open');
+        toggleMenu(btn, drop);
       });
     });
 
@@ -285,9 +333,7 @@
   }
 
   // Close menus on outside click
-  document.addEventListener('click', function () {
-    document.querySelectorAll('.proj-menu-drop').forEach(function (d) { d.classList.remove('open'); });
-  });
+  document.addEventListener('click', closeAllMenus);
 
   async function loadProjects() {
     try {
@@ -331,28 +377,125 @@
 
   newProjectBtn.addEventListener('click', function (e) {
     e.stopPropagation();
-    newProjectDrop.classList.toggle('open');
+    toggleMenu(newProjectBtn, newProjectDrop);
   });
 
-  newProjectDrop.querySelectorAll('[data-template]').forEach(function (item) {
-    item.addEventListener('click', async function () {
-      newProjectDrop.classList.remove('open');
-      newProjectBtn.disabled = true; newProjectBtn.textContent = 'Creating…';
-      try {
-        var project = await apiFetch('/projects', { method: 'POST', body: JSON.stringify({ template: item.dataset.template }) });
-        window.location.href = '/project.html?id=' + project.id;
-      } catch (err) {
-        showAlert(err.message);
-        newProjectBtn.disabled = false;
-        newProjectBtn.innerHTML = newProjectBtnHtml;
-      }
+  async function createProject(body) {
+    newProjectDrop.classList.remove('open');
+    newProjectBtn.disabled = true; newProjectBtn.textContent = 'Creating…';
+    try {
+      var project = await apiFetch('/projects', { method: 'POST', body: JSON.stringify(body) });
+      window.location.href = '/project.html?id=' + project.id;
+    } catch (err) {
+      showAlert(err.message);
+      newProjectBtn.disabled = false;
+      newProjectBtn.innerHTML = newProjectBtnHtml;
+    }
+  }
+
+  // Rebuilds the New Project dropdown: the two built-in scaffolds, any
+  // custom templates saved via project.html's "Save as Template", and a
+  // link into the template manager. Re-run whenever lastTemplates changes.
+  function renderNewProjectMenu() {
+    var html =
+      '<button class="proj-menu-item" data-template="full">Scaffolded — 4 phases</button>' +
+      '<button class="proj-menu-item" data-template="simple">Simple — 1 phase, 1 task</button>';
+    if (lastTemplates.length) {
+      html += '<div class="proj-menu-sep"></div>';
+      html += lastTemplates.map(function (t) {
+        return '<button class="proj-menu-item" data-template-id="' + t.id + '">' + escHtml(t.name) + '</button>';
+      }).join('');
+    }
+    html += '<div class="proj-menu-sep"></div>';
+    html += '<button class="proj-menu-item" id="manageTemplatesItem">Manage templates…</button>';
+    newProjectDrop.innerHTML = html;
+
+    newProjectDrop.querySelectorAll('[data-template]').forEach(function (item) {
+      item.addEventListener('click', function () { createProject({ template: item.dataset.template }); });
     });
+    newProjectDrop.querySelectorAll('[data-template-id]').forEach(function (item) {
+      item.addEventListener('click', function () { createProject({ template_id: item.dataset.templateId }); });
+    });
+    document.getElementById('manageTemplatesItem').addEventListener('click', function () {
+      newProjectDrop.classList.remove('open');
+      openManageTemplatesModal();
+    });
+  }
+
+  var lastTemplates = [];
+  async function loadTemplates() {
+    try {
+      lastTemplates = await apiFetch('/templates');
+    } catch (err) {
+      lastTemplates = [];
+    }
+    renderNewProjectMenu();
+  }
+
+  // ── Manage Templates ──────────────────────────────────────────────────
+  var manageTemplatesBackdrop = document.getElementById('manageTemplatesBackdrop');
+  var templatesList = document.getElementById('templatesList');
+
+  function openManageTemplatesModal() {
+    renderTemplatesList();
+    manageTemplatesBackdrop.style.display = 'flex';
+  }
+  function closeManageTemplatesModal() {
+    manageTemplatesBackdrop.style.display = 'none';
+  }
+  document.getElementById('manageTemplatesClose').addEventListener('click', closeManageTemplatesModal);
+  manageTemplatesBackdrop.addEventListener('click', function (e) {
+    if (e.target === manageTemplatesBackdrop) closeManageTemplatesModal();
   });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && manageTemplatesBackdrop.style.display !== 'none') closeManageTemplatesModal();
+  });
+
+  function renderTemplatesList() {
+    if (!lastTemplates.length) {
+      templatesList.innerHTML = '<div class="modal-list-empty">No saved templates yet — open a project and use “Save as Template” to create one.</div>';
+      return;
+    }
+    templatesList.innerHTML = lastTemplates.map(function (t) {
+      return '<div class="modal-row">' +
+        '<div><div class="modal-row-name">' + escHtml(t.name) + '</div>' +
+        '<div class="modal-row-meta">' + t.phase_count + ' phase' + (t.phase_count === 1 ? '' : 's') + ', ' + t.task_count + ' task' + (t.task_count === 1 ? '' : 's') + '</div></div>' +
+        '<div class="modal-row-actions">' +
+          '<button class="modal-row-btn" data-rename="' + t.id + '" aria-label="Rename template" title="Rename">✎</button>' +
+          '<button class="modal-row-btn danger" data-remove="' + t.id + '" aria-label="Delete template" title="Delete">✕</button>' +
+        '</div></div>';
+    }).join('');
+
+    templatesList.querySelectorAll('[data-rename]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var tmpl = lastTemplates.find(function (t) { return String(t.id) === btn.dataset.rename; });
+        var name = prompt('Template name:', tmpl ? tmpl.name : '');
+        if (!name || !name.trim() || (tmpl && name.trim() === tmpl.name)) return;
+        try {
+          await apiFetch('/templates/' + btn.dataset.rename, { method: 'PATCH', body: JSON.stringify({ name: name.trim() }) });
+          await loadTemplates();
+          renderTemplatesList();
+        } catch (err) { showAlert(err.message); }
+      });
+    });
+    templatesList.querySelectorAll('[data-remove]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        var tmpl = lastTemplates.find(function (t) { return String(t.id) === btn.dataset.remove; });
+        if (!confirm('Delete template "' + (tmpl ? tmpl.name : '') + '"? This cannot be undone.')) return;
+        try {
+          await apiFetch('/templates/' + btn.dataset.remove, { method: 'DELETE' });
+          await loadTemplates();
+          renderTemplatesList();
+        } catch (err) { showAlert(err.message); }
+      });
+    });
+  }
 
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  loadTemplates();
   loadProjects();
 })();
 </script>

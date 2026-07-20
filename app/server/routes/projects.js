@@ -237,9 +237,23 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/projects — create project + seed phases/tasks/deliverables
 router.post('/', requireAuth, async (req, res) => {
-  const { title = 'New Application Project', description = '', client = '', template } = req.body;
-  const phasesToSeed = template === 'simple' ? SIMPLE_PHASE : DEFAULT_PHASES;
+  const { title = 'New Application Project', description = '', client = '', template, template_id } = req.body;
   try {
+    let phasesToSeed;
+    if (template_id) {
+      const tmplId = parseInt(template_id, 10);
+      if (!Number.isInteger(tmplId)) {
+        return res.status(400).json({ error: 'Invalid template_id' });
+      }
+      const tmplResult = await db.query('SELECT definition FROM templates WHERE id = $1', [tmplId]);
+      if (!tmplResult.rows.length) {
+        return res.status(404).json({ error: 'Template not found' });
+      }
+      phasesToSeed = JSON.parse(tmplResult.rows[0].definition);
+    } else {
+      phasesToSeed = template === 'simple' ? SIMPLE_PHASE : DEFAULT_PHASES;
+    }
+
     const project = await db.transaction(async (tx) => {
       const proj = await tx.query(
         `INSERT INTO projects (title, description, client, created_by)
