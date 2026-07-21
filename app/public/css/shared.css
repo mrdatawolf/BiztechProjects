@@ -213,6 +213,9 @@ main.main-wide{max-width:none}
 .proj-menu-sep{height:1px;background:var(--div);margin:var(--s1) 0}
 .empty-state{text-align:center;padding:var(--s16) var(--s6);color:var(--txtm)}
 
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.app-version{position:fixed;right:var(--s3);bottom:var(--s2);font-size:var(--xs);color:var(--txtf);z-index:10;pointer-events:none}
+
 /* ── Modal ──────────────────────────────────────────────────────────────── */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:var(--s6);z-index:2000}
 .modal{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);box-shadow:var(--sh3);width:100%;max-width:400px;padding:var(--s6)}

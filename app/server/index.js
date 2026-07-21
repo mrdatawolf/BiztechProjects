@@ -36,8 +36,13 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+app.get('/api/version', (req, res) => {
+  res.json({ version: require('../package.json').version });
+});
+
 app.use('/api/auth',         require('./routes/auth'));
 app.use('/api/users',        require('./routes/users'));
+app.use('/api/companies',    require('./routes/companies'));
 app.use('/api/projects',     require('./routes/projects'));
 app.use('/api/phases',       require('./routes/phases'));
 app.use('/api/tasks',        require('./routes/tasks'));

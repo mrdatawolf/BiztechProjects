@@ -85,7 +85,10 @@
       <span class="badge b-new badge-cycle" id="statusBadge" title="Click to change status">New</span>
       <span style="font-size:var(--xs);color:var(--txtm)">Started: <span id="startDate">—</span></span>
       <span style="font-size:var(--xs);color:var(--txtm)">Client:
-        <input class="editable" id="projClient" placeholder="Client or context" style="font-size:var(--xs);width:200px">
+        <select class="editable" id="projClient" style="font-size:var(--xs);width:180px"><option value="">Loading…</option></select>
+      </span>
+      <span style="font-size:var(--xs);color:var(--txtm)">Lead:
+        <select class="editable" id="projLead" style="font-size:var(--xs);width:130px"><option value="">Unassigned</option></select>
       </span>
       <label style="font-size:var(--xs);color:var(--txtm);display:flex;align-items:center;gap:var(--s2);cursor:pointer">
         <input type="checkbox" id="pausedCheck">
@@ -124,7 +127,6 @@
         <input class="editable" id="teamSize" style="width:50px;font-size:var(--lg);font-weight:700">
         <span style="font-size:var(--sm);font-weight:400;color:var(--txtm)"> members</span>
       </div>
-      <div class="sumsub"><select class="editable" id="teamLead" style="font-size:var(--xs);width:130px"><option value="">Unassigned</option></select></div>
     </div>
     <div class="sumcard">
       <div class="sumlbl">Est. Hours</div>
@@ -151,6 +153,7 @@
 
 <script src="/js/Sortable.min.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/footer.js"></script>
 <script>
 (function () {
   if (!requireAuth()) return;
@@ -168,7 +171,7 @@
   async function loadUsers() {
     try {
       var users = await apiFetch('/users');
-      var select = document.getElementById('teamLead');
+      var select = document.getElementById('projLead');
       users.forEach(function (u) {
         userMap[u.id] = u.name;
         var opt = document.createElement('option');
@@ -178,6 +181,38 @@
       });
     } catch (err) {
       showAlert('Failed to load users: ' + err.message);
+    }
+  }
+
+  async function loadCompanies() {
+    var select = document.getElementById('projClient');
+    try {
+      var data = await apiFetch('/companies');
+      select.innerHTML = '<option value="">Select client…</option>';
+      (data.companies || []).forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+      if (state && state.client) {
+        select.value = state.client;
+        if (select.selectedIndex === -1) {
+          var current = document.createElement('option');
+          current.value = state.client;
+          current.textContent = state.client;
+          select.insertBefore(current, select.firstChild.nextSibling);
+          select.value = state.client;
+        }
+      }
+    } catch (err) {
+      select.innerHTML = '';
+      var current = document.createElement('option');
+      current.value = state ? (state.client || '') : '';
+      current.textContent = current.value || '(unavailable)';
+      select.appendChild(current);
+      select.disabled = true;
+      showAlert('Failed to load companies list: ' + err.message);
     }
   }
 
@@ -678,7 +713,7 @@
           description: document.getElementById('projDesc').value,
           client: document.getElementById('projClient').value,
           team_size: parseInt(document.getElementById('teamSize').value) || 1,
-          team_lead_id: document.getElementById('teamLead').value || null,
+          team_lead_id: document.getElementById('projLead').value || null,
           status: state.status,
           paused: state.paused,
           pause_reason: prEl.value
@@ -715,11 +750,10 @@
     document.title = (state.title || 'Project') + ' — ProjectPlan';
     document.getElementById('projTitle').value = state.title || '';
     document.getElementById('projDesc').value = state.description || '';
-    document.getElementById('projClient').value = state.client || '';
     document.getElementById('teamSize').value = state.team_size || 1;
-    var teamLeadSel = document.getElementById('teamLead');
-    teamLeadSel.value = state.team_lead_id ? String(state.team_lead_id) : '';
-    if (teamLeadSel.selectedIndex === -1) teamLeadSel.value = '';
+    var projLeadSel = document.getElementById('projLead');
+    projLeadSel.value = state.team_lead_id ? String(state.team_lead_id) : '';
+    if (projLeadSel.selectedIndex === -1) projLeadSel.value = '';
 
     var badge = document.getElementById('statusBadge');
     applyBadge(badge, state.status, state.paused);
@@ -772,15 +806,17 @@
       } catch (err) { showAlert(err.message); }
     });
 
-    ['projTitle','projDesc','projClient','teamSize'].forEach(function (id) {
+    ['projTitle','projDesc','teamSize'].forEach(function (id) {
       document.getElementById(id).addEventListener('blur', function () {
         markDirty('project');
         saveProjectFields();
       });
     });
-    document.getElementById('teamLead').addEventListener('change', function () {
-      markDirty('project');
-      saveProjectFields();
+    ['projClient','projLead'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', function () {
+        markDirty('project');
+        saveProjectFields();
+      });
     });
   }
 
@@ -804,7 +840,7 @@
             description: document.getElementById('projDesc').value,
             client: document.getElementById('projClient').value,
             team_size: parseInt(document.getElementById('teamSize').value) || 1,
-            team_lead_id: document.getElementById('teamLead').value || null,
+            team_lead_id: document.getElementById('projLead').value || null,
             status: state.status,
             paused: state.paused,
             pause_reason: document.getElementById('pauseReason').value
@@ -914,6 +950,7 @@
     try {
       state = await apiFetch('/projects/' + projectId);
       hydrateHeader();
+      await loadCompanies();
       renderPhases();
       renderTL();
       updateStats();
