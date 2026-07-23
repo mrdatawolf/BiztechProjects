@@ -34,10 +34,10 @@
       <span>Compact view</span>
     </label>
     <button class="tbtn" id="themeBtn" aria-label="Toggle theme"></button>
-    <input type="file" id="importFile" accept=".json" style="display:none">
+    <input type="file" id="importFile" accept=".json,.md,.markdown" style="display:none">
     <button class="btn btn-g" id="importBtn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="15"/></svg>
-      Import JSON
+      Import
     </button>
     <div class="proj-menu">
       <button class="btn btn-p" id="newProjectBtn">
@@ -47,6 +47,7 @@
       <div class="proj-menu-drop proj-menu-drop-wide" id="newProjectDrop">
         <button class="proj-menu-item" data-template="full">Scaffolded — 4 phases</button>
         <button class="proj-menu-item" data-template="simple">Simple — 1 phase, 1 task</button>
+        <a href="/PROJECT_TEMPLATE.md" download class="proj-menu-item">Get Template</a>
       </div>
     </div>
     <div class="user-chip">
@@ -65,6 +66,60 @@
     </div>
     <div class="modal-body">
       <div class="modal-list" id="templatesList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="importMdBackdrop" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-hd">
+      <span>Import Project Details</span>
+      <button class="modal-x" id="importMdClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="importMdTitle">Title</label>
+        <input class="modal-input" id="importMdTitle">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdClient">Client</label>
+        <input class="modal-input" id="importMdClient">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdStatus">Status</label>
+        <select class="modal-input" id="importMdStatus">
+          <option value="New">New</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Complete">Complete</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdPriority">Priority</label>
+        <select class="modal-input" id="importMdPriority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdDueDate">Due Date</label>
+        <input type="date" class="modal-input" id="importMdDueDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdTeamSize">Team Size</label>
+        <input type="number" min="1" class="modal-input" id="importMdTeamSize" value="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="importMdTeamLead">Team Lead</label>
+        <select class="modal-input" id="importMdTeamLead">
+          <option value="">Unassigned</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-g" id="importMdCancel">Cancel</button>
+      <button class="btn btn-p" id="importMdSubmit">Create Project</button>
     </div>
   </div>
 </div>

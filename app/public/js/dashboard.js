@@ -261,6 +261,160 @@
     }
   }
 
+  // ── Markdown import ────────────────────────────────────────────────────
+  // Turns a ProjectPlan markdown outline (see PROJECT_TEMPLATE.md) into the
+  // { title, phases } shape the /projects/import metadata modal fills the
+  // rest of. Recognized per-phase sections: Goal → subtitle, Tasks →
+  // tasks[], Deliverables → deliverables[]; any other heading is folded
+  // into notes so nothing in the source file is silently dropped.
+  function parseMarkdownProject(text) {
+    var lines = text.replace(/\r\n/g, '\n').split('\n');
+    var title = null;
+    var phaseBlocks = [];
+    var current = null;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^-{3,}\s*$/.test(line.trim())) continue; // markdown "---" separator
+
+      var h1 = line.match(/^#\s+(.+)$/);
+      var h2 = line.match(/^##\s+(.+)$/);
+      var h3 = line.match(/^###\s+(.+)$/);
+
+      if (h1 && title === null) {
+        title = h1[1].replace(/^Project:\s*/i, '').trim();
+        continue;
+      }
+      if (h2) {
+        current = { heading: h2[1].trim(), sections: [] };
+        phaseBlocks.push(current);
+        continue;
+      }
+      if (h3 && current) {
+        current.sections.push({ heading: h3[1].trim(), lines: [] });
+        continue;
+      }
+      if (current && current.sections.length) {
+        current.sections[current.sections.length - 1].lines.push(line);
+      }
+    }
+
+    if (!title || !phaseBlocks.length) return null;
+
+    function bullets(ls) {
+      return ls
+        .map(function (l) { return l.replace(/^\s*[-*]\s+/, '').trim(); })
+        .filter(function (l) { return l.length > 0; });
+    }
+
+    var phases = phaseBlocks.map(function (block, idx) {
+      var name = block.heading.replace(/^Phase\s*\d+\s*-\s*/i, '').trim() || block.heading;
+      var subtitle = '';
+      var tasks = [];
+      var deliverables = [];
+      var notesParts = [];
+
+      block.sections.forEach(function (sec) {
+        var key = sec.heading.toLowerCase();
+        if (key === 'goal') {
+          subtitle = sec.lines.join(' ').trim();
+        } else if (key === 'tasks') {
+          tasks = bullets(sec.lines).map(function (b) { return { name: b, priority: 'm' }; });
+        } else if (key === 'deliverables') {
+          deliverables = bullets(sec.lines).map(function (b) { return { label: b }; });
+        } else {
+          var body = bullets(sec.lines).map(function (b) { return '- ' + b; }).join('\n');
+          notesParts.push('**' + sec.heading + '**\n' + body);
+        }
+      });
+
+      return {
+        position: idx, name: name, subtitle: subtitle, duration: '',
+        color_class: 'p' + ((idx % 4) + 1),
+        notes: notesParts.join('\n\n'),
+        tasks: tasks, deliverables: deliverables
+      };
+    });
+
+    return { title: title, phases: phases };
+  }
+
+  var importMdBackdrop = document.getElementById('importMdBackdrop');
+  var importMdParsed = null;
+  var importMdUsersLoaded = false;
+
+  async function ensureImportMdUsers() {
+    if (importMdUsersLoaded) return;
+    try {
+      var users = await apiFetch('/users');
+      var sel = document.getElementById('importMdTeamLead');
+      users.forEach(function (u) {
+        var opt = document.createElement('option');
+        opt.value = u.name;
+        opt.textContent = u.name;
+        sel.appendChild(opt);
+      });
+      importMdUsersLoaded = true;
+    } catch (err) { /* leave the dropdown as Unassigned-only */ }
+  }
+
+  async function openImportMdModal(parsed) {
+    importMdParsed = parsed;
+    document.getElementById('importMdTitle').value = parsed.title;
+    document.getElementById('importMdClient').value = '';
+    document.getElementById('importMdStatus').value = 'New';
+    document.getElementById('importMdPriority').value = 'medium';
+    document.getElementById('importMdDueDate').value = '';
+    document.getElementById('importMdTeamSize').value = 1;
+    document.getElementById('importMdTeamLead').value = '';
+    await ensureImportMdUsers();
+    importMdBackdrop.style.display = 'flex';
+  }
+
+  function closeImportMdModal() {
+    importMdBackdrop.style.display = 'none';
+    importMdParsed = null;
+  }
+
+  document.getElementById('importMdClose').addEventListener('click', closeImportMdModal);
+  document.getElementById('importMdCancel').addEventListener('click', closeImportMdModal);
+
+  document.getElementById('importMdSubmit').addEventListener('click', async function () {
+    if (!importMdParsed) return;
+    var btn = this;
+    var title = document.getElementById('importMdTitle').value.trim();
+    if (!title) { showAlert('Title is required.'); return; }
+    var payload = {
+      project: {
+        title: title,
+        description: '',
+        client: document.getElementById('importMdClient').value.trim(),
+        status: document.getElementById('importMdStatus').value,
+        priority: document.getElementById('importMdPriority').value,
+        due_date: document.getElementById('importMdDueDate').value || null,
+        team_size: parseInt(document.getElementById('importMdTeamSize').value, 10) || 1,
+        team_lead: document.getElementById('importMdTeamLead').value,
+        paused: false
+      },
+      phases: importMdParsed.phases,
+      links: []
+    };
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      await runImport(payload);
+    } catch (err) {
+      showAlert(err.message || 'Import failed.');
+      btn.disabled = false; btn.textContent = 'Create Project';
+    }
+  });
+
+  async function runImport(payload) {
+    var project = await apiFetch('/projects/import', { method: 'POST', body: JSON.stringify(payload) });
+    window.location.href = '/project.html?id=' + project.id;
+  }
+
+  var IMPORT_BTN_HTML = document.getElementById('importBtn').innerHTML;
+
   document.getElementById('importBtn').addEventListener('click', function () {
     document.getElementById('importFile').click();
   });
@@ -269,22 +423,32 @@
     var file = this.files[0];
     if (!file) return;
     this.value = '';
+    var isMarkdown = /\.(md|markdown)$/i.test(file.name);
     var btn = document.getElementById('importBtn');
-    btn.disabled = true; btn.textContent = 'Importing…';
+    btn.disabled = true; btn.textContent = 'Reading…';
     try {
       var text = await file.text();
+      if (isMarkdown) {
+        var parsed = parseMarkdownProject(text);
+        if (!parsed) {
+          showAlert('Invalid file — expected a "# Project:" title and at least one "## Phase" section.');
+          return;
+        }
+        await openImportMdModal(parsed);
+        return;
+      }
       var data = JSON.parse(text);
       if (!data.project || !Array.isArray(data.phases)) {
         showAlert('Invalid file — must be a ProjectPlan export JSON.');
         return;
       }
-      var project = await apiFetch('/projects/import', { method: 'POST', body: JSON.stringify(data) });
-      window.location.href = '/project.html?id=' + project.id;
+      btn.textContent = 'Importing…';
+      await runImport(data);
     } catch (err) {
       showAlert(err.message || 'Import failed — check the file format.');
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="15"/></svg> Import JSON';
+      btn.innerHTML = IMPORT_BTN_HTML;
     }
   });
 
