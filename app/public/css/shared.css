@@ -63,6 +63,12 @@ main.main-wide{max-width:none}
 .b-new{background:var(--prihl);color:var(--pri)}.b-act{background:var(--suchl);color:var(--suc)}.b-done{background:var(--bluhl);color:var(--blu)}.b-pause{background:var(--gldhl);color:var(--gld)}
 .badge-cycle{cursor:pointer;user-select:none}.badge-cycle:hover{opacity:.8}
 
+/* ── Dashboard card status chip (icon-only; card border carries the color) ── */
+.stat-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex-shrink:0;border-radius:var(--rfl);background:var(--txti)}
+.stat-badge svg{width:14px;height:14px}
+.stat-badge.badge-cycle:hover{opacity:.8}
+.stat-badge.stat-new{color:var(--pri)}.stat-badge.stat-act{color:var(--suc)}.stat-badge.stat-done{color:var(--blu)}.stat-badge.stat-pause{color:var(--gld)}
+
 /* ── Editable inputs ────────────────────────────────────────────────────── */
 .editable{background:transparent;border:1px solid transparent;border-radius:var(--rsm);padding:2px var(--s2);transition:border-color var(--tr),background var(--tr)}
 .editable:hover{border-color:var(--bdr);background:var(--surf)}
@@ -184,8 +190,12 @@ main.main-wide{max-width:none}
 .pm-client-grp{display:flex;flex-direction:column;gap:var(--s3)}
 .pm-client-hd{font-size:var(--xs);font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txtf)}
 .proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:var(--s6);margin-top:var(--s6)}
-.proj-card{position:relative;overflow:hidden;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rxl);padding:var(--s5) var(--s6);box-shadow:var(--sh1);transition:box-shadow var(--tr);display:flex;flex-direction:column;gap:var(--s3);text-decoration:none;color:var(--txt)}
+.proj-card{position:relative;overflow:hidden;background:var(--surf);border:1px solid var(--bdr);border-top-width:3px;border-bottom-width:3px;border-radius:var(--rxl);padding:var(--s5) var(--s6);box-shadow:var(--sh1);transition:box-shadow var(--tr),border-color var(--tr);display:flex;flex-direction:column;gap:var(--s3);text-decoration:none;color:var(--txt)}
 .proj-card:hover{box-shadow:var(--sh2)}
+.proj-card.stat-new{border-top-color:var(--pri);border-bottom-color:var(--pri)}
+.proj-card.stat-act{border-top-color:var(--suc);border-bottom-color:var(--suc)}
+.proj-card.stat-done{border-top-color:var(--blu);border-bottom-color:var(--blu)}
+.proj-card.stat-pause{border-top-color:var(--gld);border-bottom-color:var(--gld)}
 .proj-card.band-pm::before,.proj-card.band-co::after{content:'';position:absolute;top:0;bottom:0;width:4px}
 .proj-card.band-pm::before{left:0;background:hsl(var(--pm-h) 55% 82%)}
 .proj-card.band-co::after{right:0;background:hsl(var(--co-h) 55% 82%)}
