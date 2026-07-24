@@ -221,6 +221,11 @@ main.main-wide{max-width:none}
 .proj-menu-item.danger{color:var(--err)}
 .proj-menu-item.danger:hover{background:var(--errhl)}
 .proj-menu-sep{height:1px;background:var(--div);margin:var(--s1) 0}
+.proj-menu-caret{float:right;transition:transform var(--tr)}
+.proj-menu-sub{display:none}
+.proj-menu-sub.open{display:block}
+.proj-menu-item[aria-expanded="true"] .proj-menu-caret{transform:rotate(90deg)}
+.proj-menu-subitem{padding-left:var(--s6)}
 .empty-state{text-align:center;padding:var(--s16) var(--s6);color:var(--txtm)}
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */

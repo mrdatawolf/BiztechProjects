@@ -1,0 +1,48 @@
+# ProjectPlan text import template.
+#
+# Use this if your plan came out of an LLM (or elsewhere) as plain text
+# without markdown formatting. Fill in the blanks below and use the
+# "Import" button on the dashboard to create a project from this file.
+# Any line starting with "#" (like these) is a comment and is ignored
+# on import. Structure:
+#
+#   Project: <title>                — optional; falls back to the file name
+#   Phase N - <phase name>
+#   Goal                            — one sentence describing the phase's purpose
+#   Tasks                           — one item per line; each line becomes a trackable task
+#   Deliverables                    — one item per line; each line becomes a trackable deliverable
+#
+# Keep Tasks/Deliverables items on consecutive lines with no blank lines
+# between them — a blank line ends the list. Anything else you add after
+# a phase's lists (notes, caveats, etc.) gets folded into that phase's
+# notes on import, so nothing is lost.
+#
+# Repeat the "Phase N - ..." block for as many phases as the project needs.
+
+Project: <project title>
+
+Phase 1 - <phase name>
+Goal
+
+<one sentence describing what this phase accomplishes>
+
+Tasks
+<task>
+<task>
+
+Deliverables
+<deliverable>
+<deliverable>
+
+Phase 2 - <phase name>
+Goal
+
+<one sentence describing what this phase accomplishes>
+
+Tasks
+<task>
+<task>
+
+Deliverables
+<deliverable>
+<deliverable>

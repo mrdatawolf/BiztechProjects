@@ -339,6 +339,93 @@
     return { title: title, phases: phases };
   }
 
+  // ── Plain-text import ───────────────────────────────────────────────────
+  // Same idea as parseMarkdownProject, but for LLM-generated plans that
+  // dropped the markdown syntax (see PROJECT_TEMPLATE.txt / Examples/HS_AI_
+  // EXPANSION.txt): "Phase N - <name>" and bare "Goal" / "Tasks" /
+  // "Deliverables" lines instead of #/##/### headings, and one item per
+  // line instead of "- " bullets. Lines starting with "#" are template
+  // comments and are always skipped. Since real Tasks/Deliverables lists
+  // are contiguous (no blank lines between items), a blank line ends the
+  // list; anything after it up to the next heading/phase is folded into
+  // the phase's notes instead of becoming a bogus task/deliverable.
+  function parseTextProject(text, fallbackTitle) {
+    var lines = text.replace(/\r\n/g, '\n').split('\n');
+    var title = null;
+    var phaseBlocks = [];
+    var current = null;
+
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var line = raw.trim();
+      if (/^#/.test(line)) continue; // template comment/instructions
+      if (/^-{3,}\s*$/.test(line)) continue; // optional "---" separator
+
+      var phaseMatch = line.match(/^Phase\s*\d+\s*-\s*(.+)$/i);
+      if (phaseMatch) {
+        current = { heading: line, sections: [], trailing: [] };
+        phaseBlocks.push(current);
+        continue;
+      }
+
+      var sectionMatch = line.match(/^(Goal|Tasks|Deliverables)\s*$/i);
+      if (current && sectionMatch) {
+        current.sections.push({ type: sectionMatch[1].toLowerCase(), lines: [], stopped: false });
+        continue;
+      }
+
+      if (!current) {
+        if (title === null && line) title = line.replace(/^Project:\s*/i, '').trim();
+        continue;
+      }
+
+      if (!current.sections.length) continue; // stray line before first section in a phase
+
+      var sec = current.sections[current.sections.length - 1];
+      if (sec.type === 'tasks' || sec.type === 'deliverables') {
+        if (!line) { sec.stopped = true; continue; }
+        if (sec.stopped) { current.trailing.push(raw); continue; }
+        sec.lines.push(raw);
+      } else {
+        sec.lines.push(raw);
+      }
+    }
+
+    if (!phaseBlocks.length) return null;
+
+    function items(ls) {
+      return ls.map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+    }
+
+    var phases = phaseBlocks.map(function (block, idx) {
+      var name = block.heading.replace(/^Phase\s*\d+\s*-\s*/i, '').trim() || block.heading;
+      var subtitle = '';
+      var tasks = [];
+      var deliverables = [];
+
+      block.sections.forEach(function (sec) {
+        if (sec.type === 'goal') {
+          subtitle = items(sec.lines).join(' ');
+        } else if (sec.type === 'tasks') {
+          tasks = items(sec.lines).map(function (b) { return { name: b, priority: 'm' }; });
+        } else if (sec.type === 'deliverables') {
+          deliverables = items(sec.lines).map(function (b) { return { label: b }; });
+        }
+      });
+
+      var notes = items(block.trailing).join('\n');
+
+      return {
+        position: idx, name: name, subtitle: subtitle, duration: '',
+        color_class: 'p' + ((idx % 4) + 1),
+        notes: notes,
+        tasks: tasks, deliverables: deliverables
+      };
+    });
+
+    return { title: title || fallbackTitle, phases: phases };
+  }
+
   var importMdBackdrop = document.getElementById('importMdBackdrop');
   var importMdParsed = null;
   var importMdUsersLoaded = false;
@@ -424,14 +511,18 @@
     if (!file) return;
     this.value = '';
     var isMarkdown = /\.(md|markdown)$/i.test(file.name);
+    var isPlainText = /\.txt$/i.test(file.name);
     var btn = document.getElementById('importBtn');
     btn.disabled = true; btn.textContent = 'Reading…';
     try {
       var text = await file.text();
-      if (isMarkdown) {
-        var parsed = parseMarkdownProject(text);
+      if (isMarkdown || isPlainText) {
+        var fallbackTitle = file.name.replace(/\.[^.]+$/, '');
+        var parsed = isMarkdown ? parseMarkdownProject(text) : parseTextProject(text, fallbackTitle);
         if (!parsed) {
-          showAlert('Invalid file — expected a "# Project:" title and at least one "## Phase" section.');
+          showAlert(isMarkdown
+            ? 'Invalid file — expected a "# Project:" title and at least one "## Phase" section.'
+            : 'Invalid file — expected at least one "Phase N - <name>" section.');
           return;
         }
         await openImportMdModal(parsed);
@@ -488,6 +579,12 @@
       }).join('');
     }
     html += '<div class="proj-menu-sep"></div>';
+    html += '<button class="proj-menu-item" id="getTemplateItem" aria-expanded="false">Get Template <span class="proj-menu-caret">&rsaquo;</span></button>' +
+      '<div class="proj-menu-sub" id="getTemplateSub">' +
+        '<a href="/PROJECT_TEMPLATE.md" download class="proj-menu-item proj-menu-subitem">Markdown (.md)</a>' +
+        '<a href="/PROJECT_TEMPLATE.txt" download class="proj-menu-item proj-menu-subitem">Plain text (.txt)</a>' +
+      '</div>';
+    html += '<div class="proj-menu-sep"></div>';
     html += '<button class="proj-menu-item" id="manageTemplatesItem">Manage templates…</button>';
     newProjectDrop.innerHTML = html;
 
@@ -496,6 +593,20 @@
     });
     newProjectDrop.querySelectorAll('[data-template-id]').forEach(function (item) {
       item.addEventListener('click', function () { createProject({ template_id: item.dataset.templateId }); });
+    });
+    var getTemplateItem = document.getElementById('getTemplateItem');
+    var getTemplateSub = document.getElementById('getTemplateSub');
+    getTemplateItem.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = getTemplateSub.classList.toggle('open');
+      getTemplateItem.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    getTemplateSub.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        newProjectDrop.classList.remove('open');
+        getTemplateSub.classList.remove('open');
+        getTemplateItem.setAttribute('aria-expanded', 'false');
+      });
     });
     document.getElementById('manageTemplatesItem').addEventListener('click', function () {
       newProjectDrop.classList.remove('open');
