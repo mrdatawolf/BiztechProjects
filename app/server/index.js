@@ -52,6 +52,7 @@ app.use('/api/hardware',     require('./routes/hardware'));
 app.use('/api/time-entries', require('./routes/timeEntries'));
 app.use('/api/links',        require('./routes/links'));
 app.use('/api/templates',    require('./routes/templates'));
+app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/backup',       require('./routes/backup'));
 app.use('/api/docs',         require('./routes/docs'));
 
