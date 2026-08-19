@@ -106,6 +106,8 @@ All configuration lives in `.env` at the project root.
 | `DB_PATH` | `Data/projectdb` | Path to the PGlite database directory, relative to the project root. Use `memory://` for a throw-away in-memory database. |
 | `JWT_SECRET` | *(auto-generated)* | Secret used to sign login tokens. Must be kept private. Generated on first run and saved to `.env` if left blank. |
 | `JWT_EXPIRES_IN` | `7d` | Session duration (e.g. `7d`, `24h`, `60m`). |
+| `INTEGRATION_TOKEN` | *(disabled)* | Long-lived, read-only bearer token for trusted service integrations. |
+| `PUBLIC_BASE_URL` | *(request host)* | Browser-facing server root used to build project links in integration responses. |
 
 ---
 

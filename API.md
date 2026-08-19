@@ -62,6 +62,8 @@ expired token returns `401`.
 | DELETE | `/api/links/:id` | ✓ | Delete a project link |
 | GET | `/api/backup/download` | ✓ | Download a zip of the database directory |
 | GET | `/api/backup/info` | ✓ | Database path and size |
+| GET | `/api/integrations/projects` | Integration token | List canonical project summaries |
+| GET | `/api/integrations/projects/:id/summary` | Integration token | Read one canonical project summary |
 
 ---
 
@@ -124,6 +126,37 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
+
+## Read-only integrations
+
+These endpoints are intended for trusted applications such as BT Standup. Set
+`INTEGRATION_TOKEN` to a long random value and send it as a bearer token. They
+do not accept a user JWT and expose no mutation operations. If the token is not
+configured, the integration API responds with `503`.
+
+```bash
+curl http://localhost:3000/api/integrations/projects \
+  -H "Authorization: Bearer $INTEGRATION_TOKEN"
+```
+
+Both the list endpoint and `GET /api/integrations/projects/:id/summary` return
+the same summary shape. Progress is the rounded percentage of completed tasks;
+a taskless project explicitly marked Complete reports 100 percent.
+
+```json
+{
+  "id": 5,
+  "title": "New Client Site",
+  "status": "In Progress",
+  "paused": false,
+  "pause_reason": "",
+  "task_total": 24,
+  "task_done": 10,
+  "progress": 42,
+  "updated_at": "2026-08-19T18:30:00.000Z",
+  "web_url": "http://localhost:3000/project.html?id=5"
+}
+```
 
 ## Projects
 
