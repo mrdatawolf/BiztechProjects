@@ -89,11 +89,17 @@ router.post('/import', requireAuth, async (req, res) => {
         for (let ti = 0; ti < (ph.tasks || []).length; ti++) {
           const t = ph.tasks[ti];
           const taskPriority = TASK_PRIORITIES.includes(t.priority) ? t.priority : 'm';
+          const boardStatus = ['backlog','ready','in_progress','review','done'].includes(t.board_status)
+            ? t.board_status : (t.done ? 'done' : 'backlog');
+          const actualSeconds = Number.isSafeInteger(Number(t.actual_seconds)) && Number(t.actual_seconds) >= 0
+            ? Number(t.actual_seconds) : 0;
           await tx.query(
-            `INSERT INTO tasks (phase_id, position, name, assignee, due_date, priority, done, expected_hours)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            `INSERT INTO tasks (phase_id, position, name, assignee, due_date, priority, done, expected_hours, board_status, board_position, actual_seconds, timer_started_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                     CASE WHEN $9 = 'in_progress' THEN now() ELSE NULL END)`,
             [phaseId, ti, t.name || '', t.assignee || '', t.due_date || null,
-             taskPriority, t.done || false, t.expected_hours || null]
+             taskPriority, boardStatus === 'done', t.expected_hours || null, boardStatus,
+             Number.isInteger(t.board_position) ? t.board_position : ti, actualSeconds]
           );
         }
 

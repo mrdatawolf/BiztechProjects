@@ -44,6 +44,7 @@ expired token returns `401`.
 | DELETE | `/api/phases/:id` | ✓ | Delete a phase (cascades) |
 | POST | `/api/tasks` | ✓ | Add a task to a phase |
 | POST | `/api/tasks/reorder` | ✓ | Reorder tasks |
+| POST | `/api/tasks/board/reorder` | ✓ | Move and reorder project board cards |
 | PATCH | `/api/tasks/:id` | ✓ | Update a task |
 | DELETE | `/api/tasks/:id` | ✓ | Delete a task |
 | POST | `/api/deliverables` | ✓ | Add a deliverable to a phase |
@@ -325,8 +326,11 @@ curl -X POST http://localhost:3000/api/tasks/reorder \
 ### `PATCH /api/tasks/:id`
 
 Body: any of `name`, `assignee`, `due_date`, `priority`, `done`,
-`expected_hours`. `expected_hours` must be a non-negative number or an
-empty string to clear it.
+`expected_hours`, `board_status`, `actual_seconds`. `expected_hours` must be a non-negative
+number or an empty string to clear it. `board_status` is one of `backlog`,
+`ready`, `in_progress`, `review`, or `done`. Updating `done` also updates the
+board status, and moving a task into or out of `done` updates `done`.
+`actual_seconds` is editable only while the task timer is stopped.
 
 ```bash
 curl -X PATCH http://localhost:3000/api/tasks/88 \
@@ -336,6 +340,23 @@ curl -X PATCH http://localhost:3000/api/tasks/88 \
 
 ```json
 { "id": 88, "done": true, "..." : "..." }
+```
+
+### `POST /api/tasks/board/reorder`
+
+Atomically moves and orders every task on a project board. The five lane
+arrays must contain each task in the project exactly once. Entering In Progress
+starts the task timer; leaving it stops the timer and adds the elapsed duration
+to `actual_seconds`.
+
+```bash
+curl -X POST http://localhost:3000/api/tasks/board/reorder \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"project_id":5,"lanes":{"backlog":[85],"ready":[86],"in_progress":[87],"review":[],"done":[88]}}'
+```
+
+```json
+{ "ok": true }
 ```
 
 ### `DELETE /api/tasks/:id`

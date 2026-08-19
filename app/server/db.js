@@ -59,7 +59,12 @@ async function initDb() {
       due_date       DATE,
       priority       TEXT NOT NULL DEFAULT 'm' CHECK (priority IN ('h','m','l')),
       done           BOOLEAN NOT NULL DEFAULT false,
-      expected_hours DECIMAL(6,2)
+      expected_hours DECIMAL(6,2),
+      board_status   TEXT NOT NULL DEFAULT 'backlog'
+                       CHECK (board_status IN ('backlog','ready','in_progress','review','done')),
+      board_position INTEGER NOT NULL DEFAULT 0,
+      actual_seconds BIGINT NOT NULL DEFAULT 0,
+      timer_started_at TIMESTAMPTZ
     );
 
     CREATE TABLE IF NOT EXISTS deliverables (
@@ -114,6 +119,13 @@ async function initDb() {
 async function migrateDb() {
   const steps = [
     `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS expected_hours DECIMAL(6,2)`,
+    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_status TEXT NOT NULL DEFAULT 'backlog'
+       CHECK (board_status IN ('backlog','ready','in_progress','review','done'))`,
+    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_position INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_seconds BIGINT NOT NULL DEFAULT 0`,
+    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timer_started_at TIMESTAMPTZ`,
+    // Preserve the meaning of existing completion checkboxes on first upgrade.
+    `UPDATE tasks SET board_status = 'done' WHERE done = true AND board_status = 'backlog'`,
     `ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high','critical'))`,
     `ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE`,
     `ALTER TABLE projects ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT false`,
