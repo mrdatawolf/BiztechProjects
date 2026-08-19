@@ -174,6 +174,24 @@ main.main-wide{max-width:none}
 .phdr{margin-bottom:var(--s8)}
 .pmeta{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4);flex-wrap:wrap}
 
+/* ── Project task board ────────────────────────────────────────────────── */
+.view-toolbar{display:flex;justify-content:flex-end;margin-bottom:var(--s4)}
+.view-tabs{display:inline-flex;padding:3px;background:var(--surfoff);border:1px solid var(--bdr);border-radius:var(--rmd)}
+.view-tab{padding:var(--s1) var(--s4);border-radius:calc(var(--rmd) - 2px);font-size:var(--xs);font-weight:600;color:var(--txtm)}
+.view-tab.active{background:var(--surf);color:var(--pri);box-shadow:var(--sh1)}
+.task-board{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:var(--s4);align-items:start;overflow-x:auto;padding-bottom:var(--s4)}
+.board-lane{min-width:220px;background:var(--surfoff);border:1px solid var(--bdr);border-radius:var(--rlg);overflow:hidden}
+.board-lane-hd{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);border-bottom:1px solid var(--bdr);font-size:var(--xs);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.board-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 var(--s2);border-radius:var(--rfl);background:var(--surfdyn);color:var(--txtm)}
+.board-list{min-height:120px;padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3)}
+.board-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rmd);padding:var(--s3);box-shadow:var(--sh1);cursor:grab}
+.board-card:active{cursor:grabbing}.board-card.sortable-ghost{opacity:.35}
+.board-card-title{font-size:var(--sm);font-weight:600;line-height:1.4;margin-bottom:var(--s2)}
+.board-card-meta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);font-size:var(--xs);color:var(--txtm)}
+.board-phase{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:15em}
+.board-priority{width:8px;height:8px;border-radius:50%}.board-priority.ph{background:var(--err)}.board-priority.pm{background:var(--gld)}.board-priority.pl{background:var(--suc)}
+.board-empty{font-size:var(--xs);color:var(--txtf);text-align:center;padding:var(--s5) var(--s2)}
+
 /* ── Dashboard — project card grid ─────────────────────────────────────── */
 .proj-toolbar{display:flex;justify-content:flex-end;gap:var(--s6);margin-top:var(--s6)}
 .switch{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--xs);color:var(--txtm);cursor:pointer;user-select:none}
@@ -348,6 +366,7 @@ main.main-wide{max-width:none}
   .tlgrid{grid-template-columns:1fr 1fr}.phd{flex-wrap:wrap}
   .tl-form-row{flex-direction:column}
   .pm-board{grid-template-columns:1fr}
+  .task-board{grid-template-columns:repeat(5,minmax(240px,1fr))}
 }
 @media(max-width:480px){
   .tlgrid{grid-template-columns:1fr}.tlcell{border-right:none;border-bottom:1px solid var(--div)}.tlcell:last-child{border-bottom:none}

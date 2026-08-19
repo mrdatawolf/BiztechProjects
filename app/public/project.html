@@ -135,6 +135,14 @@
     </div>
   </div>
 
+  <div class="view-toolbar">
+    <div class="view-tabs" role="tablist" aria-label="Project view">
+      <button class="view-tab active" id="planViewBtn" role="tab" aria-selected="true">Plan</button>
+      <button class="view-tab" id="boardViewBtn" role="tab" aria-selected="false">Board</button>
+    </div>
+  </div>
+
+  <div id="planView">
   <div class="phsec-hd">
     <div class="sech" style="margin-bottom:0">Phases</div>
     <button class="btn btn-g" id="addPhaseBtn" style="font-size:var(--xs)">
@@ -148,6 +156,9 @@
     <div class="sech">Timeline Overview</div>
     <div class="tlgrid" id="tlEl"></div>
   </div>
+  </div>
+
+  <div id="boardView" class="task-board" style="display:none" aria-label="Task board"></div>
 </main>
 </div>
 

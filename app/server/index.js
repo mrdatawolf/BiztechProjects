@@ -6,6 +6,7 @@ const ENV_PATH = path.join(__dirname, '../../.env');
 require('dotenv').config({ path: ENV_PATH });
 const express = require('express');
 const { initDb, migrateDb } = require('./db');
+const { startBoardTimerScheduler } = require('./boardTimer');
 
 const PLACEHOLDER_SECRET = 'replace_with_a_long_random_string';
 
@@ -74,6 +75,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 initDb()
   .then(() => migrateDb())
   .then(() => {
+    startBoardTimerScheduler();
     app.listen(PORT, HOST, () => {
       const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
       console.log(`Server running at http://${displayHost}:${PORT}`);

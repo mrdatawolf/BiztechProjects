@@ -8,6 +8,8 @@ A self-hosted, multi-user project management tool for software development teams
 
 - **Phase-based project structure** — Projects are organized into phases (Discovery, Design, Development, Deployment by default), each with tasks, deliverables, and notes
 - **Task management** — Assignee, due date, priority, estimated hours, and completion tracking per task; drag-and-drop reordering within a phase
+- **Task board** — Switch any project to a five-lane Board view and move tasks through Backlog, Ready, In Progress, Review, and Done
+- **Automatic task timing** — Tasks time themselves while In Progress; actual time remains manually adjustable outside that lane, and active work returns to Ready at 5 PM server time
 - **Progress tracking** — Per-phase and project-wide completion percentages update in real time as tasks are checked off
 - **Estimated hours** — Set estimated hours per task; phase and project totals roll up automatically
 - **Project status** — Click the status badge to cycle New → In Progress → Complete; mark a project Paused with an optional reason

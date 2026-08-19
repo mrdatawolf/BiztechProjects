@@ -10,6 +10,31 @@
   var state = null;
   var dirty = new Set();
   var userMap = {};
+  var BOARD_LANES = [
+    { id: 'backlog', label: 'Backlog' },
+    { id: 'ready', label: 'Ready' },
+    { id: 'in_progress', label: 'In Progress' },
+    { id: 'review', label: 'Review' },
+    { id: 'done', label: 'Done' }
+  ];
+  var boardClock = null;
+
+  function taskActualSeconds(task) {
+    var seconds = parseInt(task.actual_seconds, 10) || 0;
+    if (task.timer_started_at) {
+      seconds += Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000));
+    }
+    return seconds;
+  }
+
+  function formatDuration(seconds) {
+    seconds = Math.max(0, Math.floor(seconds || 0));
+    var hours = Math.floor(seconds / 3600);
+    var minutes = Math.floor((seconds % 3600) / 60);
+    if (hours) return hours + 'h ' + minutes + 'm';
+    if (minutes) return minutes + 'm';
+    return seconds + 's';
+  }
 
   async function loadUsers() {
     try {
@@ -145,6 +170,7 @@
     cb.type = 'checkbox'; cb.className = 'tck'; cb.checked = task.done;
     cb.addEventListener('change', async function () {
       task.done = cb.checked;
+      task.board_status = task.done ? 'done' : 'backlog';
       if (task.done) row.classList.add('done'); else row.classList.remove('done');
       updPhStats(phaseId);
       // Auto-promote project from New → In Progress on first completed task
@@ -155,9 +181,12 @@
         apiFetch('/projects/' + projectId, { method: 'PATCH', body: JSON.stringify({ status: 'In Progress' }) }).catch(function () {});
       }
       try {
-        await apiFetch('/tasks/' + task.id, { method: 'PATCH', body: JSON.stringify({ done: task.done }) });
+        var updatedTask = await apiFetch('/tasks/' + task.id, { method: 'PATCH', body: JSON.stringify({ done: task.done }) });
+        Object.assign(task, updatedTask);
+        renderBoard();
       } catch (err) {
         task.done = !task.done; cb.checked = task.done;
+        task.board_status = task.done ? 'done' : 'backlog';
         if (task.done) row.classList.add('done'); else row.classList.remove('done');
         updPhStats(phaseId);
         showAlert(err.message);
@@ -200,6 +229,31 @@
       saveTask(task);
     });
     es.appendChild(ei); meta.appendChild(es);
+
+    // Actual hours are editable except while the board timer is running.
+    var actual = document.createElement('span'); actual.className = 'tmf';
+    actual.title = task.timer_started_at ? 'Actual time is running' : 'Actual hours';
+    var actualLabel = document.createElement('span'); actualLabel.textContent = 'Actual'; actual.appendChild(actualLabel);
+    var actualInput = document.createElement('input'); actualInput.type = 'number'; actualInput.className = 'editable';
+    actualInput.min = '0'; actualInput.step = '0.01'; actualInput.style.cssText = 'font-size:var(--xs);width:62px';
+    actualInput.value = (taskActualSeconds(task) / 3600).toFixed(2);
+    actualInput.disabled = !!task.timer_started_at;
+    actualInput.addEventListener('change', async function () {
+      var hours = Number(this.value);
+      if (!Number.isFinite(hours) || hours < 0) { this.value = (taskActualSeconds(task) / 3600).toFixed(2); return; }
+      var previous = task.actual_seconds;
+      task.actual_seconds = Math.round(hours * 3600);
+      try {
+        await apiFetch('/tasks/' + task.id, { method: 'PATCH', body: JSON.stringify({ actual_seconds: task.actual_seconds }) });
+        flashSaved();
+        renderBoard();
+      } catch (err) {
+        task.actual_seconds = previous;
+        this.value = (taskActualSeconds(task) / 3600).toFixed(2);
+        showAlert(err.message);
+      }
+    });
+    actual.appendChild(actualInput); meta.appendChild(actual);
 
     // Assignee
     var as = document.createElement('span'); as.className = 'tmf';
@@ -462,6 +516,7 @@
       if (ph) ph.tasks.push(task);
       var tlist = document.getElementById('tl' + phaseId); if (tlist) tlist.appendChild(mkRow(task, phaseId));
       updPhStats(phaseId);
+      renderBoard();
     } catch (err) { showAlert(err.message); }
   }
 
@@ -496,6 +551,151 @@
         } catch (err) { showAlert(err.message); }
       }
     });
+  }
+
+  function allBoardTasks() {
+    var tasks = [];
+    state.phases.forEach(function (ph) {
+      ph.tasks.forEach(function (task) {
+        // Older API responses remain usable during a rolling upgrade.
+        if (!task.board_status) task.board_status = task.done ? 'done' : 'backlog';
+        tasks.push({ task: task, phase: ph });
+      });
+    });
+    return tasks;
+  }
+
+  function boardCard(item) {
+    var task = item.task;
+    var card = document.createElement('div');
+    card.className = 'board-card';
+    card.dataset.taskId = task.id;
+
+    var title = document.createElement('div');
+    title.className = 'board-card-title';
+    title.textContent = task.name;
+    card.appendChild(title);
+
+    var meta = document.createElement('div');
+    meta.className = 'board-card-meta';
+    var dot = document.createElement('span');
+    dot.className = 'board-priority p' + (task.priority || 'm');
+    dot.title = ({ h: 'High priority', m: 'Medium priority', l: 'Low priority' })[task.priority] || 'Medium priority';
+    meta.appendChild(dot);
+    var phase = document.createElement('span');
+    phase.className = 'board-phase';
+    phase.textContent = item.phase.name;
+    meta.appendChild(phase);
+    if (task.assignee) {
+      var assignee = document.createElement('span');
+      assignee.textContent = '· ' + task.assignee;
+      meta.appendChild(assignee);
+    }
+    if (task.due_date) {
+      var due = document.createElement('span');
+      due.textContent = '· ' + new Date(task.due_date.slice(0, 10) + 'T00:00:00').toLocaleDateString();
+      meta.appendChild(due);
+    }
+    var elapsed = document.createElement('span');
+    elapsed.className = 'board-actual';
+    elapsed.dataset.taskId = task.id;
+    elapsed.textContent = '· ' + formatDuration(taskActualSeconds(task)) + (task.timer_started_at ? ' running' : ' actual');
+    meta.appendChild(elapsed);
+    card.appendChild(meta);
+    return card;
+  }
+
+  function boardPayload() {
+    var lanes = {};
+    BOARD_LANES.forEach(function (lane) {
+      var list = document.querySelector('.board-list[data-status="' + lane.id + '"]');
+      lanes[lane.id] = Array.from(list.querySelectorAll('.board-card')).map(function (card) {
+        return parseInt(card.dataset.taskId);
+      });
+    });
+    return lanes;
+  }
+
+  async function saveBoardOrder() {
+    var lanes = boardPayload();
+    var previous = {};
+    allBoardTasks().forEach(function (item) { previous[item.task.id] = item.task.board_status; });
+    BOARD_LANES.forEach(function (lane) {
+      lanes[lane.id].forEach(function (id, position) {
+        var item = allBoardTasks().find(function (entry) { return entry.task.id === id; });
+        if (item) {
+          item.task.board_status = lane.id;
+          item.task.board_position = position;
+          item.task.done = lane.id === 'done';
+        }
+      });
+    });
+    updateStats();
+    try {
+      var result = await apiFetch('/tasks/board/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ project_id: projectId, lanes: lanes })
+      });
+      (result.tasks || []).forEach(function (updated) {
+        var item = allBoardTasks().find(function (entry) { return entry.task.id === updated.id; });
+        if (item) Object.assign(item.task, updated);
+      });
+      flashSaved();
+      renderBoard();
+    } catch (err) {
+      allBoardTasks().forEach(function (item) {
+        item.task.board_status = previous[item.task.id];
+        item.task.done = previous[item.task.id] === 'done';
+      });
+      renderBoard();
+      showAlert('Card move failed: ' + err.message);
+    }
+  }
+
+  function renderBoard() {
+    if (!state) return;
+    var board = document.getElementById('boardView');
+    board.innerHTML = '';
+    var tasks = allBoardTasks();
+    BOARD_LANES.forEach(function (lane) {
+      var column = document.createElement('section'); column.className = 'board-lane';
+      var header = document.createElement('div'); header.className = 'board-lane-hd';
+      var label = document.createElement('span'); label.textContent = lane.label; header.appendChild(label);
+      var laneTasks = tasks.filter(function (item) { return item.task.board_status === lane.id; })
+        .sort(function (a, b) { return (parseInt(a.task.board_position) || 0) - (parseInt(b.task.board_position) || 0); });
+      var count = document.createElement('span'); count.className = 'board-count'; count.textContent = laneTasks.length; header.appendChild(count);
+      column.appendChild(header);
+      var list = document.createElement('div'); list.className = 'board-list'; list.dataset.status = lane.id;
+      laneTasks.forEach(function (item) { list.appendChild(boardCard(item)); });
+      if (!laneTasks.length) {
+        var empty = document.createElement('div'); empty.className = 'board-empty'; empty.textContent = 'Drop tasks here'; list.appendChild(empty);
+      }
+      column.appendChild(list); board.appendChild(column);
+      new Sortable(list, {
+        group: 'project-board', animation: 150, draggable: '.board-card',
+        ghostClass: 'sortable-ghost', onEnd: saveBoardOrder
+      });
+    });
+    clearInterval(boardClock);
+    boardClock = setInterval(function () {
+      allBoardTasks().forEach(function (item) {
+        if (!item.task.timer_started_at) return;
+        var elapsed = board.querySelector('.board-actual[data-task-id="' + item.task.id + '"]');
+        if (elapsed) elapsed.textContent = '· ' + formatDuration(taskActualSeconds(item.task)) + ' running';
+      });
+    }, 1000);
+  }
+
+  function selectView(view) {
+    var boardSelected = view === 'board';
+    document.getElementById('planView').style.display = boardSelected ? 'none' : '';
+    document.getElementById('boardView').style.display = boardSelected ? 'grid' : 'none';
+    document.getElementById('planViewBtn').classList.toggle('active', !boardSelected);
+    document.getElementById('boardViewBtn').classList.toggle('active', boardSelected);
+    document.getElementById('planViewBtn').setAttribute('aria-selected', String(!boardSelected));
+    document.getElementById('boardViewBtn').setAttribute('aria-selected', String(boardSelected));
+    if (boardSelected) renderBoard(); else renderPhases();
+    localStorage.setItem('projectView', view);
   }
 
   function renderTL() {
@@ -580,9 +780,11 @@
 
   async function saveTask(task) {
     try {
+      var payload = { name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority, expected_hours: task.expected_hours };
+      if (!task.timer_started_at) payload.actual_seconds = parseInt(task.actual_seconds, 10) || 0;
       await apiFetch('/tasks/' + task.id, {
         method: 'PATCH',
-        body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority, expected_hours: task.expected_hours })
+        body: JSON.stringify(payload)
       });
       dirty.delete('task:' + task.id);
       flashSaved();
@@ -705,7 +907,10 @@
           state.phases.forEach(function (p) { p.tasks.forEach(function (t) { if (t.id === tId) task = t; }); });
           if (task) calls.push(apiFetch('/tasks/' + tId, {
             method: 'PATCH',
-            body: JSON.stringify({ name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority, expected_hours: task.expected_hours })
+            body: JSON.stringify(Object.assign(
+              { name: task.name, assignee: task.assignee, due_date: task.due_date || '', priority: task.priority, expected_hours: task.expected_hours },
+              task.timer_started_at ? {} : { actual_seconds: parseInt(task.actual_seconds, 10) || 0 }
+            ))
           }));
         }
       });
@@ -721,6 +926,8 @@
   });
 
   document.getElementById('addPhaseBtn').addEventListener('click', addPhase);
+  document.getElementById('planViewBtn').addEventListener('click', function () { selectView('plan'); });
+  document.getElementById('boardViewBtn').addEventListener('click', function () { selectView('board'); });
 
   // ── Export ─────────────────────────────────────────────────────────────
   document.getElementById('expBtn').addEventListener('click', function () {
@@ -796,7 +1003,9 @@
       await loadCompanies();
       renderPhases();
       renderTL();
+      renderBoard();
       updateStats();
+      selectView(localStorage.getItem('projectView') === 'board' ? 'board' : 'plan');
     } catch (err) {
       showAlert('Failed to load project: ' + err.message);
     }
